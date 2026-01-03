@@ -178,49 +178,64 @@ export function TopBar() {
 
   return (
     <>
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
-        {/* Search */}
-        <div className="flex items-center gap-4 flex-1 max-w-xl">
+      <header className="h-14 sm:h-16 border-b border-border bg-card flex items-center justify-between px-3 sm:px-6 pl-14 lg:pl-6">
+        {/* Search - Hidden on mobile, shown as icon */}
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-xl">
+          {/* Mobile search button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden h-9 w-9"
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+
+          {/* Desktop search bar */}
           <Button
             variant="outline"
-            className="w-full justify-start text-muted-foreground h-10"
+            className="hidden sm:flex w-full justify-start text-muted-foreground h-10 transition-all duration-200 hover:border-primary/50"
             onClick={() => setCommandOpen(true)}
           >
             <Search className="h-4 w-4 mr-2" />
             <span className="flex-1 text-left">{t('common.search_placeholder')}</span>
-            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            <kbd className="hidden md:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-xs">⌘</span>K
             </kbd>
           </Button>
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Dark mode toggle */}
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 transition-transform duration-200 hover:scale-110"
             onClick={toggleDarkMode}
           >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? (
+              <Sun className="h-4 w-4 transition-transform duration-300 rotate-0 hover:rotate-90" />
+            ) : (
+              <Moon className="h-4 w-4 transition-transform duration-300 rotate-0 hover:-rotate-12" />
+            )}
           </Button>
 
-          {/* Language switcher */}
+          {/* Language switcher - Hidden on mobile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9">
+              <Button variant="ghost" size="icon" className="h-9 w-9 hidden sm:flex">
                 <Globe className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="animate-scale-in">
               <DropdownMenuLabel>Idioma</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {Object.entries(locales).map(([code, name]) => (
                 <DropdownMenuItem
                   key={code}
                   onClick={() => setLocale(code as Locale)}
-                  className={locale === code ? 'bg-accent' : ''}
+                  className={`transition-colors ${locale === code ? 'bg-accent' : ''}`}
                 >
                   {name}
                 </DropdownMenuItem>
@@ -231,36 +246,37 @@ export function TopBar() {
           {/* Notifications */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 relative">
+              <Button variant="ghost" size="icon" className="h-9 w-9 relative transition-transform duration-200 hover:scale-110">
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground flex items-center justify-center">
+                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground flex items-center justify-center animate-bounce-in">
                     {unreadCount}
                   </span>
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0">
+            <PopoverContent align="end" className="w-[calc(100vw-24px)] sm:w-80 p-0 animate-scale-in">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-semibold text-sm">{t('common.notifications')}</h3>
                 {unreadCount > 0 && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllAsRead}>
-                    Marcar todo como leído
+                    <span className="hidden sm:inline">Marcar todo como leído</span>
+                    <span className="sm:hidden">Marcar leído</span>
                   </Button>
                 )}
               </div>
-              <ScrollArea className="h-[320px]">
+              <ScrollArea className="h-[280px] sm:h-[320px]">
                 {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                    <Bell className="h-8 w-8 mb-2 opacity-50" />
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground animate-fade-in">
+                    <Bell className="h-8 w-8 mb-2 opacity-50 animate-float" />
                     <p className="text-sm">Sin notificaciones</p>
                   </div>
                 ) : (
-                  <div className="divide-y">
+                  <div className="divide-y stagger-children">
                     {notifications.map(notification => (
                       <div
                         key={notification.id}
-                        className={`flex gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
+                        className={`flex gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-all duration-200 active:scale-[0.98] ${
                           !notification.read ? 'bg-primary/5' : ''
                         }`}
                         onClick={() => handleNotificationClick(notification)}
@@ -274,7 +290,7 @@ export function TopBar() {
                               {notification.title}
                             </p>
                             {!notification.read && (
-                              <span className="shrink-0 h-2 w-2 rounded-full bg-primary mt-1.5" />
+                              <span className="shrink-0 h-2 w-2 rounded-full bg-primary mt-1.5 animate-pulse" />
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -291,7 +307,8 @@ export function TopBar() {
               </ScrollArea>
               <div className="border-t p-2">
                 <Button variant="ghost" className="w-full text-sm" onClick={() => navigate('/settings')}>
-                  Ver configuración de notificaciones
+                  <span className="hidden sm:inline">Ver configuración de notificaciones</span>
+                  <span className="sm:hidden">Configuración</span>
                 </Button>
               </div>
             </PopoverContent>
@@ -300,16 +317,16 @@ export function TopBar() {
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-9 gap-2 pl-2 pr-3">
-                <Avatar className="h-7 w-7">
+              <Button variant="ghost" className="h-9 gap-2 pl-2 pr-2 sm:pr-3 transition-transform duration-200 hover:scale-105">
+                <Avatar className="h-7 w-7 transition-transform duration-200">
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden sm:inline text-sm font-medium">{currentUser.name.split(' ')[0]}</span>
+                <span className="hidden md:inline text-sm font-medium">{currentUser.name.split(' ')[0]}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 animate-scale-in">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{currentUser.name}</p>
@@ -320,20 +337,25 @@ export function TopBar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+              <DropdownMenuItem onClick={() => setProfileOpen(true)} className="transition-colors">
                 <User className="mr-2 h-4 w-4" />
                 {t('common.profile')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
+              <DropdownMenuItem onClick={() => navigate('/settings')} className="transition-colors">
                 <Settings className="mr-2 h-4 w-4" />
                 {t('nav.ajustes')}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              {/* Language option for mobile */}
+              <DropdownMenuItem className="sm:hidden transition-colors">
+                <Globe className="mr-2 h-4 w-4" />
+                Idioma
+              </DropdownMenuItem>
+              <DropdownMenuItem className="transition-colors">
                 <HelpCircle className="mr-2 h-4 w-4" />
                 Ayuda
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive transition-colors">
                 <LogOut className="mr-2 h-4 w-4" />
                 {t('common.logout')}
               </DropdownMenuItem>

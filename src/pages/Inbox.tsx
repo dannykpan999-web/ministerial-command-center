@@ -108,65 +108,69 @@ export default function InboxPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
       <PageHeader
         title={t('inbox.title')}
         description={t('inbox.description')}
         action={
-          <Button onClick={() => navigate('/inbox/new')}>
+          <Button onClick={() => navigate('/inbox/new')} className="btn-animate">
             <Plus className="h-4 w-4 mr-2" />
-            {t('inbox.register_new')}
+            <span className="hidden sm:inline">{t('inbox.register_new')}</span>
+            <span className="sm:hidden">Nuevo</span>
           </Button>
         }
       />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t('common.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-10"
           />
         </div>
-        <Select value={entityFilter} onValueChange={setEntityFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder={t('inbox.all_entities')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
-            {entities.map(entity => (
-              <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder={t('inbox.all_statuses')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
-            <SelectItem value="pending">{t('inbox.pending')}</SelectItem>
-            <SelectItem value="in_progress">{t('inbox.in_progress')}</SelectItem>
-            <SelectItem value="completed">{t('inbox.completed')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <SelectTrigger className="w-full sm:w-40 h-10">
+              <SelectValue placeholder={t('inbox.all_entities')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
+              {entities.map(entity => (
+                <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-36 h-10">
+              <SelectValue placeholder={t('inbox.all_statuses')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
+              <SelectItem value="pending">{t('inbox.pending')}</SelectItem>
+              <SelectItem value="in_progress">{t('inbox.in_progress')}</SelectItem>
+              <SelectItem value="completed">{t('inbox.completed')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Bulk actions */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4 p-3 bg-muted rounded-lg animate-fade-in">
           <span className="text-sm text-muted-foreground">
             {selectedIds.length} seleccionado(s)
           </span>
-          <div className="flex gap-2 ml-auto">
-            <Button variant="outline" size="sm">
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <FolderOpen className="h-4 w-4 mr-1" />
-              Abrir expediente
+              <span className="hidden sm:inline">Abrir expediente</span>
+              <span className="sm:hidden">Expediente</span>
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <UserPlus className="h-4 w-4 mr-1" />
               Asignar
             </Button>
@@ -174,7 +178,7 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Table - Desktop */}
       {loading ? (
         <DataTableSkeleton columns={6} rows={5} />
       ) : filteredDocs.length === 0 ? (
@@ -188,103 +192,190 @@ export default function InboxPage() {
           }}
         />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedIds.length === filteredDocs.length}
-                    onCheckedChange={toggleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Entidad</TableHead>
-                <TableHead>Responsable</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocs.map((doc) => {
-                const entity = getEntityById(doc.entityId);
-                const responsible = getUserById(doc.responsibleId);
-                return (
-                  <TableRow key={doc.id} className="group">
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.includes(doc.id)}
-                        onCheckedChange={() => toggleSelect(doc.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
+        <>
+          {/* Desktop Table */}
+          <div className="hidden md:block rounded-lg border animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedIds.length === filteredDocs.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Documento</TableHead>
+                  <TableHead>Entidad</TableHead>
+                  <TableHead>Responsable</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocs.map((doc, index) => {
+                  const entity = getEntityById(doc.entityId);
+                  const responsible = getUserById(doc.responsibleId);
+                  return (
+                    <TableRow
+                      key={doc.id}
+                      className="group transition-colors hover:bg-muted/50"
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.includes(doc.id)}
+                          onCheckedChange={() => toggleSelect(doc.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
+                            style={{ backgroundColor: entity?.color }}
+                          >
+                            {entity?.code}
+                          </div>
+                          <span className="text-sm">{entity?.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{responsible?.name}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {format(doc.createdAt, 'dd MMM yyyy', { locale: es })}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge variant={statusVariants[doc.status]}>
+                          {statusLabels[doc.status]}
+                        </StatusBadge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="animate-scale-in">
+                            <DropdownMenuItem>
+                              <FolderOpen className="h-4 w-4 mr-2" />
+                              Abrir expediente
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Asignar responsable
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Clock className="h-4 w-4 mr-2" />
+                              Crear plazo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Bot className="h-4 w-4 mr-2" />
+                              Enviar a IA
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <PenTool className="h-4 w-4 mr-2" />
+                              Enviar a firma
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Card List */}
+          <div className="md:hidden space-y-3 stagger-children">
+            {filteredDocs.map((doc) => {
+              const entity = getEntityById(doc.entityId);
+              const responsible = getUserById(doc.responsibleId);
+              return (
+                <div
+                  key={doc.id}
+                  className="bg-card border rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:border-primary/20 active:scale-[0.98]"
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedIds.includes(doc.id)}
+                      onCheckedChange={() => toggleSelect(doc.id)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
+                        </div>
+                        <StatusBadge variant={statusVariants[doc.status]} className="shrink-0 text-[10px]">
+                          {statusLabels[doc.status]}
+                        </StatusBadge>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
+
+                      <div className="flex items-center gap-2 mt-3">
                         <div
-                          className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
+                          className="h-5 w-5 rounded text-[9px] font-semibold flex items-center justify-center text-primary-foreground shrink-0"
                           style={{ backgroundColor: entity?.color }}
                         >
                           {entity?.code}
                         </div>
-                        <span className="text-sm">{entity?.name}</span>
+                        <span className="text-xs text-muted-foreground truncate">{entity?.name}</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{responsible?.name}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {format(doc.createdAt, 'dd MMM yyyy', { locale: es })}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge variant={statusVariants[doc.status]}>
-                        {statusLabels[doc.status]}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <FolderOpen className="h-4 w-4 mr-2" />
-                            Abrir expediente
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Asignar responsable
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Clock className="h-4 w-4 mr-2" />
-                            Crear plazo
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Bot className="h-4 w-4 mr-2" />
-                            Enviar a IA
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <PenTool className="h-4 w-4 mr-2" />
-                            Enviar a firma
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                        <div className="text-xs text-muted-foreground">
+                          <span>{responsible?.name}</span>
+                          <span className="mx-1">·</span>
+                          <span>{format(doc.createdAt, 'dd MMM', { locale: es })}</span>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="animate-scale-in">
+                            <DropdownMenuItem>
+                              <FolderOpen className="h-4 w-4 mr-2" />
+                              Abrir expediente
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Asignar responsable
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Clock className="h-4 w-4 mr-2" />
+                              Crear plazo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Bot className="h-4 w-4 mr-2" />
+                              Enviar a IA
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <PenTool className="h-4 w-4 mr-2" />
+                              Enviar a firma
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
