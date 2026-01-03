@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { DataTableSkeleton } from '@/components/ui/data-table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -26,13 +27,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus,
   Search,
-  Filter,
   MoreHorizontal,
   FolderOpen,
   UserPlus,
@@ -40,17 +47,23 @@ import {
   Bot,
   PenTool,
   Inbox,
+  Building2,
+  Sparkles,
+  ExternalLink,
+  Home,
+  FileText,
 } from 'lucide-react';
 import {
   fetchDocuments,
   entities,
-  users,
   getEntityById,
   getUserById,
+  getDepartmentById,
   Document,
 } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
 
 export default function InboxPage() {
   const { t } = useLanguage();
@@ -61,6 +74,10 @@ export default function InboxPage() {
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [classificationFilter, setClassificationFilter] = useState<string>('all');
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [decreeDialogOpen, setDecreeDialogOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -76,8 +93,19 @@ export default function InboxPage() {
                          doc.correlativeNumber.toLowerCase().includes(search.toLowerCase());
     const matchesEntity = entityFilter === 'all' || doc.entityId === entityFilter;
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-    return matchesSearch && matchesEntity && matchesStatus;
+    const matchesClassification = classificationFilter === 'all' || doc.classification === classificationFilter;
+    return matchesSearch && matchesEntity && matchesStatus && matchesClassification;
   });
+
+  const openAIPanel = (doc: Document) => {
+    setSelectedDocument(doc);
+    setAiPanelOpen(true);
+  };
+
+  const openDecreeDialog = (doc: Document) => {
+    setSelectedDocument(doc);
+    setDecreeDialogOpen(true);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev =>
@@ -120,6 +148,37 @@ export default function InboxPage() {
           </Button>
         }
       />
+
+      {/* Classification Tabs */}
+      <div className="flex gap-2 mb-4 animate-fade-in-up">
+        <Button
+          variant={classificationFilter === 'all' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setClassificationFilter('all')}
+          className="rounded-full"
+        >
+          <FileText className="h-4 w-4 mr-1.5" />
+          Todos
+        </Button>
+        <Button
+          variant={classificationFilter === 'internal' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setClassificationFilter('internal')}
+          className="rounded-full"
+        >
+          <Home className="h-4 w-4 mr-1.5" />
+          Internos
+        </Button>
+        <Button
+          variant={classificationFilter === 'external' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setClassificationFilter('external')}
+          className="rounded-full"
+        >
+          <ExternalLink className="h-4 w-4 mr-1.5" />
+          Externos
+        </Button>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -265,7 +324,16 @@ export default function InboxPage() {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="animate-scale-in">
+                          <DropdownMenuContent align="end" className="animate-scale-in w-56">
+                            <DropdownMenuItem onClick={() => openAIPanel(doc)}>
+                              <Sparkles className="h-4 w-4 mr-2 text-primary" />
+                              Ver resumen IA
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openDecreeDialog(doc)}>
+                              <Building2 className="h-4 w-4 mr-2 text-orange-500" />
+                              Decretar documento
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem>
                               <FolderOpen className="h-4 w-4 mr-2" />
                               Abrir expediente
@@ -277,10 +345,6 @@ export default function InboxPage() {
                             <DropdownMenuItem>
                               <Clock className="h-4 w-4 mr-2" />
                               Crear plazo
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Bot className="h-4 w-4 mr-2" />
-                              Enviar a IA
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <PenTool className="h-4 w-4 mr-2" />
@@ -366,6 +430,27 @@ export default function InboxPage() {
                       </div>
                     </div>
 
+                    {/* Classification badge */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <Badge variant={doc.classification === 'internal' ? 'secondary' : 'outline'} className="text-[10px]">
+                        {doc.classification === 'internal' ? (
+                          <><Home className="h-3 w-3 mr-1" />Interno</>
+                        ) : (
+                          <><ExternalLink className="h-3 w-3 mr-1" />Externo</>
+                        )}
+                      </Badge>
+                      {doc.aiSummary && (
+                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+                          <Sparkles className="h-3 w-3 mr-1" />IA
+                        </Badge>
+                      )}
+                      {doc.decretedTo && doc.decretedTo.length > 0 && (
+                        <Badge variant="outline" className="text-[10px] text-orange-500 border-orange-500/30">
+                          <Building2 className="h-3 w-3 mr-1" />{doc.decretedTo.length}
+                        </Badge>
+                      )}
+                    </div>
+
                     {/* Actions */}
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex gap-1">
@@ -373,19 +458,19 @@ export default function InboxPage() {
                           variant="ghost"
                           size="sm"
                           className="h-8 px-3 text-xs rounded-lg"
-                          onClick={(e) => { e.stopPropagation(); }}
+                          onClick={(e) => { e.stopPropagation(); openAIPanel(doc); }}
                         >
-                          <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
-                          Expediente
+                          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                          Resumen
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 px-3 text-xs rounded-lg"
-                          onClick={(e) => { e.stopPropagation(); }}
+                          onClick={(e) => { e.stopPropagation(); openDecreeDialog(doc); }}
                         >
-                          <Bot className="h-3.5 w-3.5 mr-1.5" />
-                          IA
+                          <Building2 className="h-3.5 w-3.5 mr-1.5" />
+                          Decretar
                         </Button>
                       </div>
                       <DropdownMenu>
@@ -395,6 +480,15 @@ export default function InboxPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48 animate-scale-in">
+                          <DropdownMenuItem className="py-2.5" onClick={() => openAIPanel(doc)}>
+                            <Sparkles className="h-4 w-4 mr-2 text-primary" />
+                            Ver resumen IA
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="py-2.5" onClick={() => openDecreeDialog(doc)}>
+                            <Building2 className="h-4 w-4 mr-2 text-orange-500" />
+                            Decretar documento
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem className="py-2.5">
                             <FolderOpen className="h-4 w-4 mr-2" />
                             Abrir expediente
@@ -406,10 +500,6 @@ export default function InboxPage() {
                           <DropdownMenuItem className="py-2.5">
                             <Clock className="h-4 w-4 mr-2" />
                             Crear plazo
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="py-2.5">
-                            <Bot className="h-4 w-4 mr-2" />
-                            Enviar a IA
                           </DropdownMenuItem>
                           <DropdownMenuItem className="py-2.5">
                             <PenTool className="h-4 w-4 mr-2" />
@@ -424,6 +514,42 @@ export default function InboxPage() {
             })}
           </div>
         </>
+      )}
+
+      {/* AI Panel Sheet */}
+      <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Análisis IA del Documento
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            {selectedDocument && (
+              <>
+                <div className="mb-4 p-3 rounded-lg bg-muted/50">
+                  <p className="text-sm font-medium">{selectedDocument.title}</p>
+                  <p className="text-xs text-muted-foreground">{selectedDocument.correlativeNumber}</p>
+                </div>
+                <DocumentAIPanel document={selectedDocument} />
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Decree Dialog */}
+      {selectedDocument && (
+        <DecreeDialog
+          open={decreeDialogOpen}
+          onOpenChange={setDecreeDialogOpen}
+          document={selectedDocument}
+          onDecree={(deptIds) => {
+            console.log('Decreted to departments:', deptIds);
+            setDecreeDialogOpen(false);
+          }}
+        />
       )}
     </div>
   );

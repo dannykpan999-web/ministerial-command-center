@@ -6,31 +6,66 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  whatsapp?: string;
   role: 'admin' | 'gabinete' | 'revisor' | 'lector';
   avatar?: string;
+  departmentId?: string;
 }
 
 export const users: User[] = [
-  { id: 'u1', name: 'María García López', email: 'maria.garcia@ministerio.gob', role: 'admin' },
-  { id: 'u2', name: 'Carlos Rodríguez Pérez', email: 'carlos.rodriguez@ministerio.gob', role: 'gabinete' },
-  { id: 'u3', name: 'Ana Martínez Sánchez', email: 'ana.martinez@ministerio.gob', role: 'revisor' },
-  { id: 'u4', name: 'Luis Fernández Torres', email: 'luis.fernandez@ministerio.gob', role: 'lector' },
+  { id: 'u1', name: 'María García López', email: 'maria.garcia@ministerio.gob', phone: '+240 222 123 456', whatsapp: '+240 555 123 456', role: 'admin', departmentId: 'dep1' },
+  { id: 'u2', name: 'Carlos Rodríguez Pérez', email: 'carlos.rodriguez@ministerio.gob', phone: '+240 222 234 567', whatsapp: '+240 555 234 567', role: 'gabinete', departmentId: 'dep2' },
+  { id: 'u3', name: 'Ana Martínez Sánchez', email: 'ana.martinez@ministerio.gob', phone: '+240 222 345 678', whatsapp: '+240 555 345 678', role: 'revisor', departmentId: 'dep3' },
+  { id: 'u4', name: 'Luis Fernández Torres', email: 'luis.fernandez@ministerio.gob', phone: '+240 222 456 789', whatsapp: '+240 555 456 789', role: 'lector', departmentId: 'dep4' },
 ];
 
 export const currentUser = users[0];
 
-// Entities
+// Internal Department Structure (Estructura Interna)
+export interface Department {
+  id: string;
+  name: string;
+  code: string;
+  level: number; // Hierarchy level (1 = highest)
+  parentId?: string;
+  headUserId?: string;
+  email?: string;
+  phone?: string;
+  whatsapp?: string;
+  color: string;
+}
+
+export const departments: Department[] = [
+  { id: 'dep1', name: 'Ministro', code: 'MIN', level: 1, color: '#dc2626', email: 'ministro@ministerio.gob', phone: '+240 222 100 001', whatsapp: '+240 555 100 001' },
+  { id: 'dep2', name: 'Ministro Delegado', code: 'MIND', level: 2, parentId: 'dep1', color: '#ea580c', email: 'ministro.delegado@ministerio.gob', phone: '+240 222 100 002', whatsapp: '+240 555 100 002' },
+  { id: 'dep3', name: 'Viceministro', code: 'VMIN', level: 2, parentId: 'dep1', color: '#d97706', email: 'viceministro@ministerio.gob', phone: '+240 222 100 003', whatsapp: '+240 555 100 003' },
+  { id: 'dep4', name: 'Secretario de Estado', code: 'SE', level: 3, parentId: 'dep3', color: '#ca8a04', email: 'secretario.estado@ministerio.gob', phone: '+240 222 100 004', whatsapp: '+240 555 100 004' },
+  { id: 'dep5', name: 'Secretario General', code: 'SG', level: 3, parentId: 'dep3', color: '#65a30d', email: 'secretario.general@ministerio.gob', phone: '+240 222 100 005', whatsapp: '+240 555 100 005' },
+  { id: 'dep6', name: 'Directores Generales', code: 'DG', level: 4, parentId: 'dep5', color: '#16a34a', email: 'directores@ministerio.gob', phone: '+240 222 100 006', whatsapp: '+240 555 100 006' },
+  { id: 'dep7', name: 'Inspección General de Servicios', code: 'IGS', level: 4, parentId: 'dep5', color: '#0d9488', email: 'inspeccion@ministerio.gob', phone: '+240 222 100 007', whatsapp: '+240 555 100 007' },
+  { id: 'dep8', name: 'Delegación Regional', code: 'DR', level: 5, parentId: 'dep6', color: '#0891b2', email: 'delegacion.regional@ministerio.gob', phone: '+240 222 100 008', whatsapp: '+240 555 100 008' },
+  { id: 'dep9', name: 'Sección Económica', code: 'SEC', level: 5, parentId: 'dep6', color: '#2563eb', email: 'seccion.economica@ministerio.gob', phone: '+240 222 100 009', whatsapp: '+240 555 100 009' },
+  { id: 'dep10', name: 'Funcionarios', code: 'FUNC', level: 6, parentId: 'dep6', color: '#7c3aed', email: 'funcionarios@ministerio.gob', phone: '+240 222 100 010', whatsapp: '+240 555 100 010' },
+];
+
+// Entities (External organizations)
 export interface Entity {
   id: string;
   name: string;
   code: string;
   color: string;
+  type: 'internal' | 'external';
+  email?: string;
+  phone?: string;
 }
 
 export const entities: Entity[] = [
-  { id: 'e1', name: 'Autoridad Portuaria', code: 'AP', color: '#2563eb' },
-  { id: 'e2', name: 'Telecomunicaciones', code: 'TEL', color: '#7c3aed' },
-  { id: 'e3', name: 'Cooperación Internacional', code: 'CI', color: '#059669' },
+  { id: 'e1', name: 'Autoridad Portuaria', code: 'AP', color: '#2563eb', type: 'external', email: 'info@autoridadportuaria.gob', phone: '+240 333 100 001' },
+  { id: 'e2', name: 'Telecomunicaciones', code: 'TEL', color: '#7c3aed', type: 'external', email: 'info@telecom.gob', phone: '+240 333 100 002' },
+  { id: 'e3', name: 'Cooperación Internacional', code: 'CI', color: '#059669', type: 'external', email: 'info@cooperacion.gob', phone: '+240 333 100 003' },
+  { id: 'e4', name: 'Ministerio de Hacienda', code: 'MH', color: '#dc2626', type: 'external', email: 'info@hacienda.gob', phone: '+240 333 100 004' },
+  { id: 'e5', name: 'Ministerio de Trabajo', code: 'MT', color: '#ea580c', type: 'external', email: 'info@trabajo.gob', phone: '+240 333 100 005' },
 ];
 
 // Document types
@@ -81,6 +116,12 @@ export interface Document {
   updatedAt: Date;
   content?: string;
   qrCode?: string;
+  // New fields for classification and routing
+  classification: 'internal' | 'external';
+  decretedTo?: string[]; // Department IDs where document is routed
+  aiSummary?: string;
+  aiProposedResponse?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
 
 const now = new Date();
@@ -100,6 +141,11 @@ export const documents: Document[] = [
     tags: ['Urgente', 'Respuesta requerida'],
     createdAt: subDays(now, 1),
     updatedAt: subDays(now, 1),
+    classification: 'external',
+    decretedTo: ['dep3', 'dep6'],
+    priority: 'urgent',
+    aiSummary: 'Terminal Marítima S.A. solicita ampliación de su concesión portuaria por 15 años adicionales, argumentando inversiones realizadas en infraestructura por valor de $50M y cumplimiento de todos los indicadores de gestión establecidos.',
+    aiProposedResponse: 'Estimados señores de Terminal Marítima S.A.,\n\nAcusamos recibo de su solicitud de ampliación de concesión portuaria con fecha [fecha]. Procedemos a iniciar el análisis técnico y legal correspondiente.\n\nSe ha asignado el expediente al departamento competente para su evaluación. Les mantendremos informados del avance del proceso.\n\nAtentamente,\n[Nombre del responsable]',
   },
   {
     id: 'd2',
@@ -115,6 +161,10 @@ export const documents: Document[] = [
     tags: ['Información'],
     createdAt: subDays(now, 2),
     updatedAt: subDays(now, 1),
+    classification: 'internal',
+    decretedTo: ['dep5'],
+    priority: 'medium',
+    aiSummary: 'Informe Q3 2024 muestra incremento del 12% en movimiento de carga respecto al trimestre anterior. Se destacan mejoras en tiempos de despacho y reducción de incidentes operativos.',
   },
   {
     id: 'd3',
@@ -130,6 +180,10 @@ export const documents: Document[] = [
     tags: ['Seguimiento'],
     createdAt: subDays(now, 3),
     updatedAt: subDays(now, 3),
+    classification: 'external',
+    priority: 'medium',
+    aiSummary: 'Consulta técnica sobre interpretación del artículo 45 del reglamento de telecomunicaciones referente a tarifas de interconexión entre operadores.',
+    aiProposedResponse: 'En respuesta a su consulta sobre el artículo 45 del Reglamento de Telecomunicaciones, le informamos que la interpretación correcta establece...',
   },
   {
     id: 'd4',
@@ -145,6 +199,8 @@ export const documents: Document[] = [
     tags: ['Información'],
     createdAt: subDays(now, 5),
     updatedAt: subDays(now, 4),
+    classification: 'external',
+    priority: 'low',
   },
   {
     id: 'd5',
@@ -160,6 +216,11 @@ export const documents: Document[] = [
     tags: ['Confidencial', 'Seguimiento'],
     createdAt: subDays(now, 7),
     updatedAt: subDays(now, 2),
+    classification: 'external',
+    decretedTo: ['dep1', 'dep3'],
+    priority: 'high',
+    aiSummary: 'Propuesta de cooperación técnica Francia-Guinea Ecuatorial en materia de digitalización de servicios públicos. Incluye programa de capacitación y transferencia tecnológica valorado en €2.5M.',
+    aiProposedResponse: 'Excelentísimo Embajador,\n\nAgradecemos la propuesta de cooperación técnica presentada por el Gobierno de Francia. Hemos procedido a elevar el documento a las instancias superiores para su consideración.\n\nQuedamos a su disposición para coordinar reuniones de trabajo técnico.',
   },
   {
     id: 'd6',
@@ -175,6 +236,9 @@ export const documents: Document[] = [
     tags: ['Información'],
     createdAt: subDays(now, 1),
     updatedAt: subDays(now, 1),
+    classification: 'internal',
+    decretedTo: ['dep6', 'dep7'],
+    priority: 'medium',
   },
 ];
 
@@ -538,4 +602,16 @@ export function getExpedienteById(id: string): Expediente | undefined {
 
 export function getDocumentById(id: string): Document | undefined {
   return documents.find(d => d.id === id);
+}
+
+export function getDepartmentById(id: string): Department | undefined {
+  return departments.find(d => d.id === id);
+}
+
+export function getDepartmentsByLevel(level: number): Department[] {
+  return departments.filter(d => d.level === level);
+}
+
+export function getChildDepartments(parentId: string): Department[] {
+  return departments.filter(d => d.parentId === parentId);
 }
