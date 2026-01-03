@@ -296,79 +296,127 @@ export default function InboxPage() {
             </Table>
           </div>
 
-          {/* Mobile Card List */}
-          <div className="md:hidden space-y-3 stagger-children">
-            {filteredDocs.map((doc) => {
+          {/* Mobile Card List - Beautiful redesign */}
+          <div className="md:hidden space-y-3">
+            {filteredDocs.map((doc, index) => {
               const entity = getEntityById(doc.entityId);
               const responsible = getUserById(doc.responsibleId);
+              const isSelected = selectedIds.includes(doc.id);
               return (
                 <div
                   key={doc.id}
-                  className="bg-card border rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:border-primary/20 active:scale-[0.98]"
+                  className={`
+                    relative bg-card rounded-2xl border-2 overflow-hidden
+                    transition-all duration-300 ease-out
+                    hover:shadow-lg hover:border-primary/30
+                    active:scale-[0.98]
+                    animate-fade-in-up
+                    ${isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border/50'}
+                  `}
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      checked={selectedIds.includes(doc.id)}
-                      onCheckedChange={() => toggleSelect(doc.id)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
-                        </div>
-                        <StatusBadge variant={statusVariants[doc.status]} className="shrink-0 text-[10px]">
-                          {statusLabels[doc.status]}
-                        </StatusBadge>
-                      </div>
+                  {/* Status accent bar */}
+                  <div
+                    className={`absolute top-0 left-0 right-0 h-1 ${
+                      doc.status === 'pending' ? 'bg-warning' :
+                      doc.status === 'in_progress' ? 'bg-info' :
+                      doc.status === 'completed' ? 'bg-success' : 'bg-muted'
+                    }`}
+                  />
 
-                      <div className="flex items-center gap-2 mt-3">
-                        <div
-                          className="h-5 w-5 rounded text-[9px] font-semibold flex items-center justify-center text-primary-foreground shrink-0"
-                          style={{ backgroundColor: entity?.color }}
+                  <div className="p-4 pt-5">
+                    {/* Header with checkbox and status */}
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(doc.id)}
+                        className="mt-0.5 h-5 w-5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-sm leading-tight line-clamp-2">{doc.title}</h3>
+                            <p className="text-xs text-muted-foreground mt-1 font-mono">{doc.correlativeNumber}</p>
+                          </div>
+                          <StatusBadge
+                            variant={statusVariants[doc.status]}
+                            className="shrink-0 text-[10px] px-2 py-0.5"
+                          >
+                            {statusLabels[doc.status]}
+                          </StatusBadge>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Entity and info section */}
+                    <div className="mt-4 flex items-center gap-3 p-3 rounded-xl bg-muted/50">
+                      <div
+                        className="h-10 w-10 rounded-xl text-xs font-bold flex items-center justify-center text-white shadow-sm shrink-0"
+                        style={{ backgroundColor: entity?.color }}
+                      >
+                        {entity?.code}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{entity?.name}</p>
+                        <p className="text-xs text-muted-foreground">{responsible?.name}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-muted-foreground">Recibido</p>
+                        <p className="text-sm font-medium">{format(doc.createdAt, 'dd MMM', { locale: es })}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs rounded-lg"
+                          onClick={(e) => { e.stopPropagation(); }}
                         >
-                          {entity?.code}
-                        </div>
-                        <span className="text-xs text-muted-foreground truncate">{entity?.name}</span>
+                          <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+                          Expediente
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs rounded-lg"
+                          onClick={(e) => { e.stopPropagation(); }}
+                        >
+                          <Bot className="h-3.5 w-3.5 mr-1.5" />
+                          IA
+                        </Button>
                       </div>
-
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                        <div className="text-xs text-muted-foreground">
-                          <span>{responsible?.name}</span>
-                          <span className="mx-1">·</span>
-                          <span>{format(doc.createdAt, 'dd MMM', { locale: es })}</span>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="animate-scale-in">
-                            <DropdownMenuItem>
-                              <FolderOpen className="h-4 w-4 mr-2" />
-                              Abrir expediente
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <UserPlus className="h-4 w-4 mr-2" />
-                              Asignar responsable
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Clock className="h-4 w-4 mr-2" />
-                              Crear plazo
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Bot className="h-4 w-4 mr-2" />
-                              Enviar a IA
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <PenTool className="h-4 w-4 mr-2" />
-                              Enviar a firma
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 animate-scale-in">
+                          <DropdownMenuItem className="py-2.5">
+                            <FolderOpen className="h-4 w-4 mr-2" />
+                            Abrir expediente
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="py-2.5">
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Asignar responsable
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="py-2.5">
+                            <Clock className="h-4 w-4 mr-2" />
+                            Crear plazo
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="py-2.5">
+                            <Bot className="h-4 w-4 mr-2" />
+                            Enviar a IA
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="py-2.5">
+                            <PenTool className="h-4 w-4 mr-2" />
+                            Enviar a firma
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
