@@ -871,13 +871,8 @@
   @apply h-6 w-6 animate-spin;
 }
 
-/* Mobile-optimized modals */
-@media (max-width: 639px) {
-  [role="dialog"] > div {
-    @apply !max-w-full !rounded-t-xl !rounded-b-none !bottom-0 !top-auto;
-    max-height: 90vh !important;
-  }
-}
+/* Mobile-optimized modals - applied only to specific modal types */
+/* Note: Command dialogs and other modals handle their own responsive styling */
 
 /* Smooth scrolling */
 html {
