@@ -1,0 +1,363 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Institutional Navy Theme */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Deep Navy Primary */
+    --primary: 213 50% 23%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Warm Slate Secondary */
+    --secondary: 210 15% 93%;
+    --secondary-foreground: 215 25% 25%;
+
+    /* Subtle Muted */
+    --muted: 210 15% 96%;
+    --muted-foreground: 215 15% 50%;
+
+    /* Warm Accent */
+    --accent: 38 90% 50%;
+    --accent-foreground: 215 25% 15%;
+
+    /* Status Colors */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 215 25% 15%;
+
+    --info: 200 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    /* Borders and Inputs */
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 213 50% 23%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar - Institutional Dark */
+    --sidebar-background: 213 50% 18%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 38 90% 55%;
+    --sidebar-primary-foreground: 215 25% 15%;
+    --sidebar-accent: 213 45% 25%;
+    --sidebar-accent-foreground: 210 30% 95%;
+    --sidebar-border: 213 40% 25%;
+    --sidebar-ring: 38 90% 55%;
+
+    /* Custom tokens */
+    --surface-elevated: 0 0% 100%;
+    --surface-sunken: 210 20% 96%;
+    --text-tertiary: 215 10% 60%;
+    --divider: 214 15% 92%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(213 50% 23%) 0%, hsl(213 45% 30%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(38 90% 50%) 0%, hsl(38 85% 55%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(210 20% 98%) 0%, hsl(210 15% 96%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 25% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 25% 15% / 0.08), 0 2px 4px -2px hsl(215 25% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(215 25% 15% / 0.08), 0 4px 6px -4px hsl(215 25% 15% / 0.05);
+    --shadow-card: 0 1px 3px 0 hsl(215 25% 15% / 0.06), 0 1px 2px -1px hsl(215 25% 15% / 0.06);
+    --shadow-elevated: 0 20px 25px -5px hsl(215 25% 15% / 0.1), 0 8px 10px -6px hsl(215 25% 15% / 0.08);
+
+    /* Typography */
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-serif: 'Newsreader', Georgia, serif;
+  }
+
+  .dark {
+    --background: 215 25% 10%;
+    --foreground: 210 30% 95%;
+
+    --card: 215 25% 13%;
+    --card-foreground: 210 30% 95%;
+
+    --popover: 215 25% 13%;
+    --popover-foreground: 210 30% 95%;
+
+    --primary: 38 90% 55%;
+    --primary-foreground: 215 25% 10%;
+
+    --secondary: 215 20% 20%;
+    --secondary-foreground: 210 30% 90%;
+
+    --muted: 215 20% 18%;
+    --muted-foreground: 215 15% 60%;
+
+    --accent: 38 90% 50%;
+    --accent-foreground: 215 25% 10%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 20% 22%;
+    --input: 215 20% 22%;
+    --ring: 38 90% 55%;
+
+    --sidebar-background: 215 30% 8%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 38 90% 55%;
+    --sidebar-primary-foreground: 215 25% 10%;
+    --sidebar-accent: 215 25% 15%;
+    --sidebar-accent-foreground: 210 30% 95%;
+    --sidebar-border: 215 25% 18%;
+    --sidebar-ring: 38 90% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer components {
+  /* KPI Card */
+  .kpi-card {
+    @apply relative overflow-hidden rounded-xl border bg-card p-6 transition-all duration-200;
+    box-shadow: var(--shadow-card);
+  }
+
+  .kpi-card:hover {
+    box-shadow: var(--shadow-md);
+    @apply border-primary/20;
+  }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .status-badge-success {
+    @apply bg-success/10 text-success;
+  }
+
+  .status-badge-warning {
+    @apply bg-warning/10 text-warning;
+  }
+
+  .status-badge-destructive {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .status-badge-info {
+    @apply bg-info/10 text-info;
+  }
+
+  .status-badge-muted {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Page header */
+  .page-header {
+    @apply flex flex-col gap-1 pb-6;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  .page-description {
+    @apply text-muted-foreground;
+  }
+
+  /* Sidebar navigation item */
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors;
+    @apply text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
+
+  .nav-item-active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+
+  /* Timeline */
+  .timeline-item {
+    @apply relative pl-8 pb-8 last:pb-0;
+  }
+
+  .timeline-item::before {
+    content: '';
+    @apply absolute left-3 top-2 h-full w-px bg-border;
+  }
+
+  .timeline-item:last-child::before {
+    @apply hidden;
+  }
+
+  .timeline-dot {
+    @apply absolute left-0 top-1.5 h-6 w-6 rounded-full border-2 border-primary bg-background flex items-center justify-center;
+  }
+
+  /* Empty state */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+  }
+
+  .empty-state-icon {
+    @apply mb-4 h-12 w-12 text-muted-foreground/50;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-medium text-foreground;
+  }
+
+  .empty-state-description {
+    @apply mt-1 text-sm text-muted-foreground max-w-sm;
+  }
+
+  /* Data table */
+  .data-table {
+    @apply w-full text-sm;
+  }
+
+  .data-table th {
+    @apply h-11 px-4 text-left font-medium text-muted-foreground bg-muted/50;
+  }
+
+  .data-table td {
+    @apply h-14 px-4 border-b border-border/50;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  /* Wizard step */
+  .wizard-step {
+    @apply flex items-center gap-3;
+  }
+
+  .wizard-step-number {
+    @apply flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold;
+  }
+
+  .wizard-step-number-active {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .wizard-step-number-complete {
+    @apply bg-success text-success-foreground;
+  }
+
+  .wizard-step-number-pending {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Chat message */
+  .chat-message {
+    @apply flex gap-3 p-4 rounded-lg;
+  }
+
+  .chat-message-user {
+    @apply bg-primary/5 ml-8;
+  }
+
+  .chat-message-ai {
+    @apply bg-muted mr-8;
+  }
+
+  /* Animated skeleton */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+}

@@ -1,0 +1,61 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { LanguageProvider } from "@/contexts/LanguageContext";
+import { MainLayout } from "@/components/layout/MainLayout";
+
+import Dashboard from "./pages/Dashboard";
+import InboxPage from "./pages/Inbox";
+import NewEntry from "./pages/NewEntry";
+import OutboxPage from "./pages/Outbox";
+import CasesPage from "./pages/Cases";
+import CaseDetail from "./pages/CaseDetail";
+import DeadlinesPage from "./pages/Deadlines";
+import AIAssistant from "./pages/AIAssistant";
+import MultimediaPage from "./pages/Multimedia";
+import SignaturePage from "./pages/Signature";
+import ArchivePage from "./pages/Archive";
+import ContentPage from "./pages/Content";
+import AuditPage from "./pages/Audit";
+import SettingsPage from "./pages/Settings";
+import NotFound from "./pages/NotFound";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/inbox" element={<InboxPage />} />
+              <Route path="/inbox/new" element={<NewEntry />} />
+              <Route path="/outbox" element={<OutboxPage />} />
+              <Route path="/outbox/new" element={<NewEntry />} />
+              <Route path="/cases" element={<CasesPage />} />
+              <Route path="/cases/new" element={<CasesPage />} />
+              <Route path="/cases/:id" element={<CaseDetail />} />
+              <Route path="/deadlines" element={<DeadlinesPage />} />
+              <Route path="/assistant" element={<AIAssistant />} />
+              <Route path="/multimedia" element={<MultimediaPage />} />
+              <Route path="/signature" element={<SignaturePage />} />
+              <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/content" element={<ContentPage />} />
+              <Route path="/audit" element={<AuditPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </LanguageProvider>
+  </QueryClientProvider>
+);
+
+export default App;
