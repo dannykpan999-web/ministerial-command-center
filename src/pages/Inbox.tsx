@@ -19,7 +19,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -207,26 +209,26 @@ export default function InboxPage() {
                 const typeEntities = entities.filter(e => e.type === type);
                 if (typeEntities.length === 0) return null;
                 return (
-                  <div key={type}>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
-                      {type === 'internal' && <Home className="h-3 w-3 inline mr-1.5" />}
-                      {type === 'public' && <Landmark className="h-3 w-3 inline mr-1.5" />}
-                      {type === 'private' && <Briefcase className="h-3 w-3 inline mr-1.5" />}
-                      {type === 'government' && <Building2 className="h-3 w-3 inline mr-1.5" />}
+                  <SelectGroup key={type}>
+                    <SelectLabel className="flex items-center gap-1.5 text-xs text-muted-foreground py-1.5">
+                      {type === 'internal' && <Home className="h-3 w-3" />}
+                      {type === 'public' && <Landmark className="h-3 w-3" />}
+                      {type === 'private' && <Briefcase className="h-3 w-3" />}
+                      {type === 'government' && <Building2 className="h-3 w-3" />}
                       {entityTypeLabels[type]}
-                    </div>
+                    </SelectLabel>
                     {typeEntities.map(entity => (
-                      <SelectItem key={entity.id} value={entity.id} className="pl-6">
+                      <SelectItem key={entity.id} value={entity.id}>
                         <span className="flex items-center gap-2">
                           <span
-                            className="h-2 w-2 rounded-full"
+                            className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: entity.color }}
                           />
-                          {entity.name}
+                          <span className="truncate">{entity.name}</span>
                         </span>
                       </SelectItem>
                     ))}
-                  </div>
+                  </SelectGroup>
                 );
               })}
             </SelectContent>
