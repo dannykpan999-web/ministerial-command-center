@@ -44,7 +44,6 @@ import {
   FolderOpen,
   UserPlus,
   Clock,
-  Bot,
   PenTool,
   Inbox,
   Building2,
@@ -52,6 +51,9 @@ import {
   ExternalLink,
   Home,
   FileText,
+  Landmark,
+  Factory,
+  Briefcase,
 } from 'lucide-react';
 import {
   fetchDocuments,
@@ -60,6 +62,8 @@ import {
   getUserById,
   getDepartmentById,
   Document,
+  entityTypeLabels,
+  Entity,
 } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -193,14 +197,38 @@ export default function InboxPage() {
         </div>
         <div className="flex gap-2">
           <Select value={entityFilter} onValueChange={setEntityFilter}>
-            <SelectTrigger className="w-full sm:w-40 h-10">
+            <SelectTrigger className="w-full sm:w-48 h-10">
               <SelectValue placeholder={t('inbox.all_entities')} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-80">
               <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
-              {entities.map(entity => (
-                <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
-              ))}
+              {/* Group by entity type */}
+              {(['internal', 'public', 'private', 'government'] as const).map(type => {
+                const typeEntities = entities.filter(e => e.type === type);
+                if (typeEntities.length === 0) return null;
+                return (
+                  <div key={type}>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
+                      {type === 'internal' && <Home className="h-3 w-3 inline mr-1.5" />}
+                      {type === 'public' && <Landmark className="h-3 w-3 inline mr-1.5" />}
+                      {type === 'private' && <Briefcase className="h-3 w-3 inline mr-1.5" />}
+                      {type === 'government' && <Building2 className="h-3 w-3 inline mr-1.5" />}
+                      {entityTypeLabels[type]}
+                    </div>
+                    {typeEntities.map(entity => (
+                      <SelectItem key={entity.id} value={entity.id} className="pl-6">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: entity.color }}
+                          />
+                          {entity.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </div>
+                );
+              })}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -301,7 +329,15 @@ export default function InboxPage() {
                           >
                             {entity?.code}
                           </div>
-                          <span className="text-sm">{entity?.name}</span>
+                          <div className="min-w-0">
+                            <span className="text-sm block truncate">{entity?.name}</span>
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              {entity?.type === 'internal' && <><Home className="h-2.5 w-2.5" />Interno</>}
+                              {entity?.type === 'public' && <><Landmark className="h-2.5 w-2.5" />Empresa Pública</>}
+                              {entity?.type === 'private' && <><Briefcase className="h-2.5 w-2.5" />Privada</>}
+                              {entity?.type === 'government' && <><Building2 className="h-2.5 w-2.5" />Gobierno</>}
+                            </span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -422,7 +458,12 @@ export default function InboxPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{entity?.name}</p>
-                        <p className="text-xs text-muted-foreground">{responsible?.name}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          {entity?.type === 'internal' && <><Home className="h-3 w-3" />Interno</>}
+                          {entity?.type === 'public' && <><Landmark className="h-3 w-3" />Empresa Pública</>}
+                          {entity?.type === 'private' && <><Briefcase className="h-3 w-3" />Privada</>}
+                          {entity?.type === 'government' && <><Building2 className="h-3 w-3" />Gobierno</>}
+                        </p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-xs text-muted-foreground">Recibido</p>

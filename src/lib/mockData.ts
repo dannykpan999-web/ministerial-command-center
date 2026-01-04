@@ -49,23 +49,217 @@ export const departments: Department[] = [
   { id: 'dep10', name: 'Funcionarios', code: 'FUNC', level: 6, parentId: 'dep6', color: '#7c3aed', email: 'funcionarios@ministerio.gob', phone: '+240 222 100 010', whatsapp: '+240 555 100 010' },
 ];
 
-// Entities (External organizations)
+// Entities (Organizations that interact with the ministry)
+// Types:
+// - 'internal': Internal government departments/directions (e.g., Dirección General de Telecomunicaciones)
+// - 'public': State-owned/public companies (e.g., ORTEL, GITGE, GETESA)
+// - 'private': Private sector companies
+// - 'government': Other government ministries and agencies
 export interface Entity {
   id: string;
   name: string;
   code: string;
   color: string;
-  type: 'internal' | 'external';
+  type: 'internal' | 'public' | 'private' | 'government';
+  sector?: string; // Sector category (e.g., 'telecomunicaciones', 'portuario', 'energia')
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  address?: string;
+  contactPerson?: string;
 }
 
 export const entities: Entity[] = [
-  { id: 'e1', name: 'Autoridad Portuaria', code: 'AP', color: '#2563eb', type: 'external', email: 'info@autoridadportuaria.gob', phone: '+240 333 100 001' },
-  { id: 'e2', name: 'Telecomunicaciones', code: 'TEL', color: '#7c3aed', type: 'external', email: 'info@telecom.gob', phone: '+240 333 100 002' },
-  { id: 'e3', name: 'Cooperación Internacional', code: 'CI', color: '#059669', type: 'external', email: 'info@cooperacion.gob', phone: '+240 333 100 003' },
-  { id: 'e4', name: 'Ministerio de Hacienda', code: 'MH', color: '#dc2626', type: 'external', email: 'info@hacienda.gob', phone: '+240 333 100 004' },
-  { id: 'e5', name: 'Ministerio de Trabajo', code: 'MT', color: '#ea580c', type: 'external', email: 'info@trabajo.gob', phone: '+240 333 100 005' },
+  // === SECTOR: TELECOMUNICACIONES ===
+  // Internal Department
+  {
+    id: 'e_tel_dg',
+    name: 'Dirección General de Telecomunicaciones',
+    code: 'DGT',
+    color: '#7c3aed',
+    type: 'internal',
+    sector: 'telecomunicaciones',
+    email: 'dg.telecom@ministerio.gob',
+    phone: '+240 222 200 001',
+    whatsapp: '+240 555 200 001'
+  },
+  // Public Companies (State-owned)
+  {
+    id: 'e_tel_ortel',
+    name: 'ORTEL - Operador de Telecomunicaciones',
+    code: 'ORTEL',
+    color: '#8b5cf6',
+    type: 'public',
+    sector: 'telecomunicaciones',
+    email: 'info@ortel.gq',
+    phone: '+240 222 200 010',
+    whatsapp: '+240 555 200 010',
+    contactPerson: 'Director General ORTEL'
+  },
+  {
+    id: 'e_tel_gitge',
+    name: 'GITGE - Guinea Ecuatorial de Telecomunicaciones',
+    code: 'GITGE',
+    color: '#a78bfa',
+    type: 'public',
+    sector: 'telecomunicaciones',
+    email: 'info@gitge.gq',
+    phone: '+240 222 200 011',
+    whatsapp: '+240 555 200 011',
+    contactPerson: 'Director General GITGE'
+  },
+  {
+    id: 'e_tel_getesa',
+    name: 'GETESA - Guinea Ecuatorial de Telecomunicaciones S.A.',
+    code: 'GETESA',
+    color: '#c4b5fd',
+    type: 'public',
+    sector: 'telecomunicaciones',
+    email: 'info@getesa.gq',
+    phone: '+240 222 200 012',
+    whatsapp: '+240 555 200 012',
+    contactPerson: 'Director General GETESA'
+  },
+  // Private Companies
+  {
+    id: 'e_tel_muni',
+    name: 'MUNI - Operador Móvil',
+    code: 'MUNI',
+    color: '#f59e0b',
+    type: 'private',
+    sector: 'telecomunicaciones',
+    email: 'corporativo@muni.gq',
+    phone: '+240 222 300 001',
+    contactPerson: 'Dirección Comercial'
+  },
+  {
+    id: 'e_tel_hits',
+    name: 'HITS Telecom GE',
+    code: 'HITS',
+    color: '#10b981',
+    type: 'private',
+    sector: 'telecomunicaciones',
+    email: 'info@hits-telecom.gq',
+    phone: '+240 222 300 002',
+    contactPerson: 'Gerencia General'
+  },
+
+  // === SECTOR: PORTUARIO ===
+  // Internal Department
+  {
+    id: 'e_port_dg',
+    name: 'Dirección General de Puertos',
+    code: 'DGP',
+    color: '#2563eb',
+    type: 'internal',
+    sector: 'portuario',
+    email: 'dg.puertos@ministerio.gob',
+    phone: '+240 222 200 002',
+    whatsapp: '+240 555 200 002'
+  },
+  // Public Company
+  {
+    id: 'e_port_ap',
+    name: 'Autoridad Portuaria de Guinea Ecuatorial',
+    code: 'APGE',
+    color: '#3b82f6',
+    type: 'public',
+    sector: 'portuario',
+    email: 'info@autoridadportuaria.gq',
+    phone: '+240 333 100 001',
+    whatsapp: '+240 555 100 001',
+    contactPerson: 'Presidente Autoridad Portuaria'
+  },
+  // Private Companies
+  {
+    id: 'e_port_terminal',
+    name: 'Terminal Marítima S.A.',
+    code: 'TMSA',
+    color: '#60a5fa',
+    type: 'private',
+    sector: 'portuario',
+    email: 'operaciones@terminalmaritima.gq',
+    phone: '+240 333 200 001',
+    contactPerson: 'Director de Operaciones'
+  },
+  {
+    id: 'e_port_boluda',
+    name: 'Boluda Corporación Marítima',
+    code: 'BOLUDA',
+    color: '#93c5fd',
+    type: 'private',
+    sector: 'portuario',
+    email: 'ge@boluda.com',
+    phone: '+240 333 200 002',
+    contactPerson: 'Representante País'
+  },
+
+  // === SECTOR: COOPERACIÓN INTERNACIONAL ===
+  {
+    id: 'e_coop_dg',
+    name: 'Dirección General de Cooperación',
+    code: 'DGC',
+    color: '#059669',
+    type: 'internal',
+    sector: 'cooperacion',
+    email: 'dg.cooperacion@ministerio.gob',
+    phone: '+240 222 200 003',
+    whatsapp: '+240 555 200 003'
+  },
+  {
+    id: 'e_coop_francia',
+    name: 'Embajada de Francia',
+    code: 'EMB-FR',
+    color: '#10b981',
+    type: 'government',
+    sector: 'cooperacion',
+    email: 'ambassade@france-ge.org',
+    phone: '+240 333 400 001',
+    contactPerson: 'Consejero de Cooperación'
+  },
+  {
+    id: 'e_coop_espana',
+    name: 'Embajada de España',
+    code: 'EMB-ES',
+    color: '#34d399',
+    type: 'government',
+    sector: 'cooperacion',
+    email: 'emb.malabo@maec.es',
+    phone: '+240 333 400 002',
+    contactPerson: 'Coordinador AECID'
+  },
+
+  // === OTHER GOVERNMENT ENTITIES ===
+  {
+    id: 'e_gov_hacienda',
+    name: 'Ministerio de Hacienda y Presupuestos',
+    code: 'MHP',
+    color: '#dc2626',
+    type: 'government',
+    email: 'info@hacienda.gob.gq',
+    phone: '+240 333 100 004',
+    contactPerson: 'Secretaría General'
+  },
+  {
+    id: 'e_gov_trabajo',
+    name: 'Ministerio de Trabajo y Seguridad Social',
+    code: 'MTSS',
+    color: '#ea580c',
+    type: 'government',
+    email: 'info@trabajo.gob.gq',
+    phone: '+240 333 100 005',
+    contactPerson: 'Secretaría General'
+  },
+  {
+    id: 'e_gov_justicia',
+    name: 'Ministerio de Justicia',
+    code: 'MJ',
+    color: '#be185d',
+    type: 'government',
+    email: 'info@justicia.gob.gq',
+    phone: '+240 333 100 006',
+    contactPerson: 'Secretaría General'
+  },
 ];
 
 // Document types
@@ -132,7 +326,7 @@ export const documents: Document[] = [
     correlativeNumber: 'ENT-2024-001542',
     title: 'Solicitud de ampliación de concesión portuaria',
     type: 'Solicitud',
-    entityId: 'e1',
+    entityId: 'e_port_terminal', // Terminal Marítima S.A. (Private)
     responsibleId: 'u2',
     status: 'pending',
     direction: 'in',
@@ -150,14 +344,14 @@ export const documents: Document[] = [
   {
     id: 'd2',
     correlativeNumber: 'ENT-2024-001541',
-    title: 'Informe trimestral de operaciones',
+    title: 'Informe trimestral de operaciones portuarias',
     type: 'Informe',
-    entityId: 'e1',
+    entityId: 'e_port_dg', // Dirección General de Puertos (Internal)
     responsibleId: 'u3',
     status: 'in_progress',
     direction: 'in',
     channel: 'Correo electrónico',
-    origin: 'Dirección de Operaciones',
+    origin: 'Dirección General de Puertos',
     tags: ['Información'],
     createdAt: subDays(now, 2),
     updatedAt: subDays(now, 1),
@@ -171,12 +365,12 @@ export const documents: Document[] = [
     correlativeNumber: 'ENT-2024-001540',
     title: 'Consulta sobre normativa de telecomunicaciones',
     type: 'Oficio',
-    entityId: 'e2',
+    entityId: 'e_tel_ortel', // ORTEL (Public Company)
     responsibleId: 'u2',
     status: 'pending',
     direction: 'in',
     channel: 'Mensajería física',
-    origin: 'Operador Nacional de Telecomunicaciones',
+    origin: 'ORTEL - Operador de Telecomunicaciones',
     tags: ['Seguimiento'],
     createdAt: subDays(now, 3),
     updatedAt: subDays(now, 3),
@@ -190,7 +384,7 @@ export const documents: Document[] = [
     correlativeNumber: 'SAL-2024-000823',
     title: 'Respuesta a solicitud de información',
     type: 'Respuesta',
-    entityId: 'e3',
+    entityId: 'e_coop_francia', // Embajada de Francia (Government)
     responsibleId: 'u2',
     status: 'completed',
     direction: 'out',
@@ -207,7 +401,7 @@ export const documents: Document[] = [
     correlativeNumber: 'ENT-2024-001539',
     title: 'Proyecto de cooperación bilateral',
     type: 'Memorando',
-    entityId: 'e3',
+    entityId: 'e_coop_francia', // Embajada de Francia (Government)
     responsibleId: 'u3',
     status: 'in_progress',
     direction: 'in',
@@ -227,7 +421,7 @@ export const documents: Document[] = [
     correlativeNumber: 'SAL-2024-000822',
     title: 'Notificación de actualización regulatoria',
     type: 'Circular',
-    entityId: 'e2',
+    entityId: 'e_tel_dg', // Dirección General de Telecomunicaciones (Internal)
     responsibleId: 'u2',
     status: 'pending',
     direction: 'out',
@@ -238,6 +432,81 @@ export const documents: Document[] = [
     updatedAt: subDays(now, 1),
     classification: 'internal',
     decretedTo: ['dep6', 'dep7'],
+    priority: 'medium',
+  },
+  // Additional documents for variety
+  {
+    id: 'd7',
+    correlativeNumber: 'ENT-2024-001538',
+    title: 'Solicitud de licencia de operador móvil',
+    type: 'Solicitud',
+    entityId: 'e_tel_muni', // MUNI (Private)
+    responsibleId: 'u3',
+    status: 'pending',
+    direction: 'in',
+    channel: 'Plataforma digital',
+    origin: 'MUNI - Operador Móvil',
+    tags: ['Urgente', 'Respuesta requerida'],
+    createdAt: subDays(now, 4),
+    updatedAt: subDays(now, 4),
+    classification: 'external',
+    priority: 'high',
+    aiSummary: 'MUNI solicita renovación y ampliación de su licencia de operador móvil para incluir servicios 5G en todo el territorio nacional.',
+    aiProposedResponse: 'Estimados señores de MUNI,\n\nHemos recibido su solicitud de renovación y ampliación de licencia. El expediente ha sido asignado a la Dirección General de Telecomunicaciones para su evaluación técnica.\n\nLes contactaremos para programar la inspección de infraestructura requerida.',
+  },
+  {
+    id: 'd8',
+    correlativeNumber: 'ENT-2024-001537',
+    title: 'Informe de gestión GITGE Q4 2024',
+    type: 'Informe',
+    entityId: 'e_tel_gitge', // GITGE (Public)
+    responsibleId: 'u2',
+    status: 'in_progress',
+    direction: 'in',
+    channel: 'Correo electrónico',
+    origin: 'GITGE',
+    tags: ['Información'],
+    createdAt: subDays(now, 5),
+    updatedAt: subDays(now, 3),
+    classification: 'external',
+    decretedTo: ['dep5', 'dep6'],
+    priority: 'medium',
+    aiSummary: 'Informe de gestión trimestral de GITGE mostrando expansión de red de fibra óptica en 3 provincias y mejora del 15% en velocidad promedio de conexión.',
+  },
+  {
+    id: 'd9',
+    correlativeNumber: 'ENT-2024-001536',
+    title: 'Propuesta de modernización portuaria',
+    type: 'Memorando',
+    entityId: 'e_port_ap', // Autoridad Portuaria (Public)
+    responsibleId: 'u3',
+    status: 'pending',
+    direction: 'in',
+    channel: 'Mensajería física',
+    origin: 'Autoridad Portuaria de Guinea Ecuatorial',
+    tags: ['Seguimiento', 'Respuesta requerida'],
+    createdAt: subDays(now, 6),
+    updatedAt: subDays(now, 6),
+    classification: 'external',
+    priority: 'high',
+    aiSummary: 'La Autoridad Portuaria presenta propuesta de modernización del puerto de Malabo con inversión estimada de $120M, incluyendo nuevas grúas, ampliación de muelles y sistema de gestión digital.',
+    aiProposedResponse: 'Estimado Presidente de la Autoridad Portuaria,\n\nHemos revisado su propuesta de modernización portuaria. Solicitamos una reunión técnica para discutir los detalles del proyecto y el cronograma de implementación propuesto.\n\nAsimismo, requerimos el estudio de impacto ambiental correspondiente.',
+  },
+  {
+    id: 'd10',
+    correlativeNumber: 'SAL-2024-000821',
+    title: 'Convenio de cooperación técnica España-GE',
+    type: 'Acuerdo',
+    entityId: 'e_coop_espana', // Embajada de España (Government)
+    responsibleId: 'u2',
+    status: 'completed',
+    direction: 'out',
+    channel: 'Mensajería física',
+    origin: 'Gabinete Ministerial',
+    tags: ['Confidencial'],
+    createdAt: subDays(now, 10),
+    updatedAt: subDays(now, 8),
+    classification: 'external',
     priority: 'medium',
   },
 ];
@@ -262,7 +531,7 @@ export const expedientes: Expediente[] = [
     id: 'exp1',
     number: 'EXP-2024-00342',
     title: 'Renovación concesión Terminal Norte',
-    entityId: 'e1',
+    entityId: 'e_port_terminal', // Terminal Marítima S.A. (Private)
     responsibleId: 'u2',
     status: 'open',
     priority: 'high',
@@ -275,11 +544,11 @@ export const expedientes: Expediente[] = [
     id: 'exp2',
     number: 'EXP-2024-00341',
     title: 'Licitación espectro 5G',
-    entityId: 'e2',
+    entityId: 'e_tel_dg', // Dirección General de Telecomunicaciones (Internal)
     responsibleId: 'u3',
     status: 'pending_signature',
     priority: 'urgent',
-    documentIds: ['d3'],
+    documentIds: ['d3', 'd7'],
     createdAt: subDays(now, 45),
     updatedAt: subDays(now, 2),
     description: 'Proceso de licitación para la asignación de espectro 5G.',
@@ -288,7 +557,7 @@ export const expedientes: Expediente[] = [
     id: 'exp3',
     number: 'EXP-2024-00340',
     title: 'Acuerdo cooperación Francia',
-    entityId: 'e3',
+    entityId: 'e_coop_francia', // Embajada de Francia (Government)
     responsibleId: 'u2',
     status: 'open',
     priority: 'medium',
@@ -301,37 +570,53 @@ export const expedientes: Expediente[] = [
     id: 'exp4',
     number: 'EXP-2024-00339',
     title: 'Modernización infraestructura portuaria',
-    entityId: 'e1',
+    entityId: 'e_port_ap', // Autoridad Portuaria (Public)
     responsibleId: 'u3',
     status: 'open',
     priority: 'medium',
-    documentIds: [],
+    documentIds: ['d9'],
     createdAt: subDays(now, 90),
     updatedAt: subDays(now, 10),
+    description: 'Proyecto de modernización del puerto de Malabo.',
   },
   {
     id: 'exp5',
     number: 'EXP-2024-00338',
     title: 'Regulación servicios OTT',
-    entityId: 'e2',
+    entityId: 'e_tel_ortel', // ORTEL (Public Company)
     responsibleId: 'u2',
     status: 'closed',
     priority: 'low',
     documentIds: [],
     createdAt: subDays(now, 120),
     updatedAt: subDays(now, 30),
+    description: 'Regulación de servicios Over-the-Top en telecomunicaciones.',
   },
   {
     id: 'exp6',
     number: 'EXP-2024-00337',
     title: 'Programa becas internacionales',
-    entityId: 'e3',
+    entityId: 'e_coop_espana', // Embajada de España (Government)
     responsibleId: 'u4',
     status: 'archived',
     priority: 'low',
-    documentIds: [],
+    documentIds: ['d10'],
     createdAt: subDays(now, 180),
     updatedAt: subDays(now, 60),
+    description: 'Programa de becas con cooperación española.',
+  },
+  {
+    id: 'exp7',
+    number: 'EXP-2024-00336',
+    title: 'Expansión red GITGE',
+    entityId: 'e_tel_gitge', // GITGE (Public Company)
+    responsibleId: 'u3',
+    status: 'open',
+    priority: 'high',
+    documentIds: ['d8'],
+    createdAt: subDays(now, 40),
+    updatedAt: subDays(now, 3),
+    description: 'Seguimiento de la expansión de fibra óptica de GITGE.',
   },
 ];
 
@@ -615,3 +900,32 @@ export function getDepartmentsByLevel(level: number): Department[] {
 export function getChildDepartments(parentId: string): Department[] {
   return departments.filter(d => d.parentId === parentId);
 }
+
+// Entity helper functions
+export function getEntitiesByType(type: Entity['type']): Entity[] {
+  return entities.filter(e => e.type === type);
+}
+
+export function getEntitiesBySector(sector: string): Entity[] {
+  return entities.filter(e => e.sector === sector);
+}
+
+export function getEntitySectors(): string[] {
+  const sectors = entities
+    .map(e => e.sector)
+    .filter((s): s is string => !!s);
+  return [...new Set(sectors)];
+}
+
+export const entityTypeLabels: Record<Entity['type'], string> = {
+  internal: 'Departamento Interno',
+  public: 'Empresa Pública',
+  private: 'Empresa Privada',
+  government: 'Entidad Gubernamental',
+};
+
+export const sectorLabels: Record<string, string> = {
+  telecomunicaciones: 'Telecomunicaciones',
+  portuario: 'Sector Portuario',
+  cooperacion: 'Cooperación Internacional',
+};
