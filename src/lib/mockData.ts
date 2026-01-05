@@ -36,17 +36,43 @@ export interface Department {
   color: string;
 }
 
+// MTTSIA - Ministerio de Transportes, Telecomunicaciones y Sistemas de Inteligencia Artificial
+// Minister: Honorato Evita Oma
 export const departments: Department[] = [
-  { id: 'dep1', name: 'Ministro', code: 'MIN', level: 1, color: '#dc2626', email: 'ministro@ministerio.gob', phone: '+240 222 100 001', whatsapp: '+240 555 100 001' },
-  { id: 'dep2', name: 'Ministro Delegado', code: 'MIND', level: 2, parentId: 'dep1', color: '#ea580c', email: 'ministro.delegado@ministerio.gob', phone: '+240 222 100 002', whatsapp: '+240 555 100 002' },
-  { id: 'dep3', name: 'Viceministro', code: 'VMIN', level: 2, parentId: 'dep1', color: '#d97706', email: 'viceministro@ministerio.gob', phone: '+240 222 100 003', whatsapp: '+240 555 100 003' },
-  { id: 'dep4', name: 'Secretario de Estado', code: 'SE', level: 3, parentId: 'dep3', color: '#ca8a04', email: 'secretario.estado@ministerio.gob', phone: '+240 222 100 004', whatsapp: '+240 555 100 004' },
-  { id: 'dep5', name: 'Secretario General', code: 'SG', level: 3, parentId: 'dep3', color: '#65a30d', email: 'secretario.general@ministerio.gob', phone: '+240 222 100 005', whatsapp: '+240 555 100 005' },
-  { id: 'dep6', name: 'Directores Generales', code: 'DG', level: 4, parentId: 'dep5', color: '#16a34a', email: 'directores@ministerio.gob', phone: '+240 222 100 006', whatsapp: '+240 555 100 006' },
-  { id: 'dep7', name: 'Inspección General de Servicios', code: 'IGS', level: 4, parentId: 'dep5', color: '#0d9488', email: 'inspeccion@ministerio.gob', phone: '+240 222 100 007', whatsapp: '+240 555 100 007' },
-  { id: 'dep8', name: 'Delegación Regional', code: 'DR', level: 5, parentId: 'dep6', color: '#0891b2', email: 'delegacion.regional@ministerio.gob', phone: '+240 222 100 008', whatsapp: '+240 555 100 008' },
-  { id: 'dep9', name: 'Sección Económica', code: 'SEC', level: 5, parentId: 'dep6', color: '#2563eb', email: 'seccion.economica@ministerio.gob', phone: '+240 222 100 009', whatsapp: '+240 555 100 009' },
-  { id: 'dep10', name: 'Funcionarios', code: 'FUNC', level: 6, parentId: 'dep6', color: '#7c3aed', email: 'funcionarios@ministerio.gob', phone: '+240 222 100 010', whatsapp: '+240 555 100 010' },
+  // === NIVEL 1: MINISTRO ===
+  { id: 'dep1', name: 'Ministro', code: 'MIN', level: 1, color: '#dc2626', email: 'ministro@mttsia.gob.gq', phone: '+240 222 100 001', whatsapp: '+240 555 100 001' },
+
+  // === NIVEL 2: MINISTROS DELEGADOS / VICEMINISTRO ===
+  { id: 'dep2', name: 'Ministro Delegado', code: 'MIND', level: 2, parentId: 'dep1', color: '#ea580c', email: 'ministro.delegado@mttsia.gob.gq', phone: '+240 222 100 002', whatsapp: '+240 555 100 002' },
+  { id: 'dep3', name: 'Viceministro', code: 'VMIN', level: 2, parentId: 'dep1', color: '#d97706', email: 'viceministro@mttsia.gob.gq', phone: '+240 222 100 003', whatsapp: '+240 555 100 003' },
+
+  // === NIVEL 3: SECRETARIOS ===
+  { id: 'dep4', name: 'Secretario de Estado', code: 'SE', level: 3, parentId: 'dep3', color: '#ca8a04', email: 'secretario.estado@mttsia.gob.gq', phone: '+240 222 100 004', whatsapp: '+240 555 100 004' },
+  { id: 'dep5', name: 'Secretario General', code: 'SG', level: 3, parentId: 'dep3', color: '#65a30d', email: 'secretario.general@mttsia.gob.gq', phone: '+240 222 100 005', whatsapp: '+240 555 100 005' },
+
+  // === NIVEL 4: DIRECCIONES GENERALES (Órganos Centrales) ===
+  { id: 'dg_ia', name: 'Dirección General de Sistemas de Inteligencia Artificial', code: 'DGSIA', level: 4, parentId: 'dep5', color: '#7c3aed', email: 'dg.ia@mttsia.gob.gq', phone: '+240 222 100 011', whatsapp: '+240 555 100 011' },
+  { id: 'dg_reg', name: 'Dirección General de Regulación, Reglamentación e Inspección', code: 'DGRRI', level: 4, parentId: 'dep5', color: '#2563eb', email: 'dg.regulacion@mttsia.gob.gq', phone: '+240 222 100 012', whatsapp: '+240 555 100 012' },
+  { id: 'dg_tt', name: 'Dirección General de Transportes Terrestres', code: 'DGTT', level: 4, parentId: 'dep5', color: '#059669', email: 'dg.transportes@mttsia.gob.gq', phone: '+240 222 100 013', whatsapp: '+240 555 100 013' },
+  { id: 'dg_ac', name: 'Dirección General de Aviación Civil', code: 'DGAC', level: 4, parentId: 'dep5', color: '#0891b2', email: 'dg.aviacion@mttsia.gob.gq', phone: '+240 222 100 014', whatsapp: '+240 555 100 014' },
+  { id: 'dg_mm', name: 'Dirección General de Marina Mercante', code: 'DGMM', level: 4, parentId: 'dep5', color: '#1d4ed8', email: 'dg.marina@mttsia.gob.gq', phone: '+240 222 100 015', whatsapp: '+240 555 100 015' },
+
+  // === NIVEL 4: ÓRGANOS DE CONTROL INTERNO ===
+  { id: 'dep7', name: 'Inspección General de Servicios', code: 'IGS', level: 4, parentId: 'dep5', color: '#0d9488', email: 'inspeccion@mttsia.gob.gq', phone: '+240 222 100 007', whatsapp: '+240 555 100 007' },
+
+  // === NIVEL 5: ÓRGANOS DESCONCENTRADOS ===
+  { id: 'del_malabo', name: 'Delegación Regional de Malabo', code: 'DRM', level: 5, parentId: 'dg_reg', color: '#6366f1', email: 'delegacion.malabo@mttsia.gob.gq', phone: '+240 222 100 020', whatsapp: '+240 555 100 020' },
+  { id: 'del_bata', name: 'Delegación Regional de Bata', code: 'DRB', level: 5, parentId: 'dg_reg', color: '#8b5cf6', email: 'delegacion.bata@mttsia.gob.gq', phone: '+240 222 100 021', whatsapp: '+240 555 100 021' },
+  { id: 'del_annobon', name: 'Delegación Regional de Annobón', code: 'DRA', level: 5, parentId: 'dg_reg', color: '#a855f7', email: 'delegacion.annobon@mttsia.gob.gq', phone: '+240 222 100 022', whatsapp: '+240 555 100 022' },
+  { id: 'del_kie', name: 'Delegación Regional de Kie-Ntem', code: 'DRKN', level: 5, parentId: 'dg_reg', color: '#d946ef', email: 'delegacion.kientem@mttsia.gob.gq', phone: '+240 222 100 023', whatsapp: '+240 555 100 023' },
+
+  // === NIVEL 5: SECCIONES ADMINISTRATIVAS ===
+  { id: 'dep9', name: 'Sección Económica y Financiera', code: 'SEF', level: 5, parentId: 'dep5', color: '#f59e0b', email: 'seccion.economica@mttsia.gob.gq', phone: '+240 222 100 009', whatsapp: '+240 555 100 009' },
+  { id: 'sec_rrhh', name: 'Sección de Recursos Humanos', code: 'SRRH', level: 5, parentId: 'dep5', color: '#ef4444', email: 'recursos.humanos@mttsia.gob.gq', phone: '+240 222 100 025', whatsapp: '+240 555 100 025' },
+  { id: 'sec_juridica', name: 'Sección Jurídica y Normativa', code: 'SJN', level: 5, parentId: 'dep5', color: '#be185d', email: 'seccion.juridica@mttsia.gob.gq', phone: '+240 222 100 026', whatsapp: '+240 555 100 026' },
+
+  // === NIVEL 6: FUNCIONARIOS ===
+  { id: 'dep10', name: 'Funcionarios', code: 'FUNC', level: 6, parentId: 'dep5', color: '#64748b', email: 'funcionarios@mttsia.gob.gq', phone: '+240 222 100 010', whatsapp: '+240 555 100 010' },
 ];
 
 // Entities (Organizations that interact with the ministry)
@@ -144,38 +170,86 @@ export const entities: Entity[] = [
     contactPerson: 'Gerencia General'
   },
 
-  // === SECTOR: PORTUARIO ===
+  // === SECTOR: PORTUARIO - AUTORIDADES Y ADMINISTRACIONES ===
   // Internal Department
   {
     id: 'e_port_dg',
-    name: 'Dirección General de Puertos',
-    code: 'DGP',
-    color: '#2563eb',
+    name: 'Dirección General de Marina Mercante',
+    code: 'DGMM',
+    color: '#1d4ed8',
     type: 'internal',
     sector: 'portuario',
-    email: 'dg.puertos@ministerio.gob',
+    email: 'dg.marina@mttsia.gob.gq',
     phone: '+240 222 200 002',
     whatsapp: '+240 555 200 002'
   },
-  // Public Company
+  // Public - Port Administrations
   {
-    id: 'e_port_ap',
-    name: 'Autoridad Portuaria de Guinea Ecuatorial',
-    code: 'APGE',
+    id: 'e_port_malabo',
+    name: 'Administración del Puerto de Malabo',
+    code: 'APM',
+    color: '#2563eb',
+    type: 'public',
+    sector: 'portuario',
+    email: 'puerto.malabo@puertos.gq',
+    phone: '+240 333 091 001',
+    whatsapp: '+240 555 091 001',
+    contactPerson: 'Administrador del Puerto de Malabo'
+  },
+  {
+    id: 'e_port_bata',
+    name: 'Administración del Puerto de Bata',
+    code: 'APB',
     color: '#3b82f6',
     type: 'public',
     sector: 'portuario',
-    email: 'info@autoridadportuaria.gq',
-    phone: '+240 333 100 001',
-    whatsapp: '+240 555 100 001',
-    contactPerson: 'Presidente Autoridad Portuaria'
+    email: 'puerto.bata@puertos.gq',
+    phone: '+240 333 091 002',
+    whatsapp: '+240 555 091 002',
+    contactPerson: 'Administrador del Puerto de Bata'
   },
-  // Private Companies
+  {
+    id: 'e_port_luba',
+    name: 'Administración del Puerto de Luba',
+    code: 'APL',
+    color: '#60a5fa',
+    type: 'public',
+    sector: 'portuario',
+    email: 'puerto.luba@puertos.gq',
+    phone: '+240 333 091 003',
+    whatsapp: '+240 555 091 003',
+    contactPerson: 'Administrador del Puerto de Luba'
+  },
+  {
+    id: 'e_port_cogo',
+    name: 'Administración del Puerto de Cogo',
+    code: 'APC',
+    color: '#93c5fd',
+    type: 'public',
+    sector: 'portuario',
+    email: 'puerto.cogo@puertos.gq',
+    phone: '+240 333 091 004',
+    whatsapp: '+240 555 091 004',
+    contactPerson: 'Administrador del Puerto de Cogo'
+  },
+  {
+    id: 'e_port_cargadores',
+    name: 'Consejo de Cargadores de Guinea Ecuatorial',
+    code: 'CCGE',
+    color: '#1e40af',
+    type: 'public',
+    sector: 'portuario',
+    email: 'consejo.cargadores@puertos.gq',
+    phone: '+240 333 091 005',
+    whatsapp: '+240 555 091 005',
+    contactPerson: 'Presidente del Consejo de Cargadores'
+  },
+  // Private Companies - Port Sector
   {
     id: 'e_port_terminal',
     name: 'Terminal Marítima S.A.',
     code: 'TMSA',
-    color: '#60a5fa',
+    color: '#0284c7',
     type: 'private',
     sector: 'portuario',
     email: 'operaciones@terminalmaritima.gq',
@@ -186,12 +260,123 @@ export const entities: Entity[] = [
     id: 'e_port_boluda',
     name: 'Boluda Corporación Marítima',
     code: 'BOLUDA',
-    color: '#93c5fd',
+    color: '#0369a1',
     type: 'private',
     sector: 'portuario',
     email: 'ge@boluda.com',
     phone: '+240 333 200 002',
     contactPerson: 'Representante País'
+  },
+
+  // === SECTOR: TRANSPORTE TERRESTRE ===
+  // Internal Department
+  {
+    id: 'e_trans_dg',
+    name: 'Dirección General de Transportes Terrestres',
+    code: 'DGTT',
+    color: '#059669',
+    type: 'internal',
+    sector: 'transporte_terrestre',
+    email: 'dg.transportes@mttsia.gob.gq',
+    phone: '+240 222 200 030',
+    whatsapp: '+240 555 200 030'
+  },
+  // Public - Certification Centers
+  {
+    id: 'e_trans_itv_malabo',
+    name: 'Centro de ITV de Malabo',
+    code: 'ITVM',
+    color: '#10b981',
+    type: 'public',
+    sector: 'transporte_terrestre',
+    email: 'itv.malabo@transportes.gq',
+    phone: '+240 333 092 001',
+    whatsapp: '+240 555 092 001',
+    contactPerson: 'Director Centro ITV Malabo'
+  },
+  {
+    id: 'e_trans_itv_bata',
+    name: 'Centro de ITV de Bata',
+    code: 'ITVB',
+    color: '#34d399',
+    type: 'public',
+    sector: 'transporte_terrestre',
+    email: 'itv.bata@transportes.gq',
+    phone: '+240 333 092 002',
+    whatsapp: '+240 555 092 002',
+    contactPerson: 'Director Centro ITV Bata'
+  },
+  {
+    id: 'e_trans_licencias',
+    name: 'Centro de Emisión de Licencias de Conducir',
+    code: 'CELC',
+    color: '#6ee7b7',
+    type: 'public',
+    sector: 'transporte_terrestre',
+    email: 'licencias@transportes.gq',
+    phone: '+240 333 092 003',
+    whatsapp: '+240 555 092 003',
+    contactPerson: 'Director de Licencias'
+  },
+  // Private - Transport Companies
+  {
+    id: 'e_trans_gecotrans',
+    name: 'GECOTRANS - Transportes Guinea Ecuatorial',
+    code: 'GECO',
+    color: '#047857',
+    type: 'private',
+    sector: 'transporte_terrestre',
+    email: 'info@gecotrans.gq',
+    phone: '+240 333 200 030',
+    contactPerson: 'Gerente General'
+  },
+
+  // === SECTOR: AVIACIÓN CIVIL ===
+  {
+    id: 'e_avia_dg',
+    name: 'Dirección General de Aviación Civil',
+    code: 'DGAC',
+    color: '#0891b2',
+    type: 'internal',
+    sector: 'aviacion',
+    email: 'dg.aviacion@mttsia.gob.gq',
+    phone: '+240 222 200 040',
+    whatsapp: '+240 555 200 040'
+  },
+  {
+    id: 'e_avia_malabo',
+    name: 'Aeropuerto Internacional de Malabo',
+    code: 'AIM',
+    color: '#06b6d4',
+    type: 'public',
+    sector: 'aviacion',
+    email: 'aeropuerto.malabo@aviacion.gq',
+    phone: '+240 333 093 001',
+    whatsapp: '+240 555 093 001',
+    contactPerson: 'Director del Aeropuerto de Malabo'
+  },
+  {
+    id: 'e_avia_bata',
+    name: 'Aeropuerto Internacional de Bata',
+    code: 'AIB',
+    color: '#22d3ee',
+    type: 'public',
+    sector: 'aviacion',
+    email: 'aeropuerto.bata@aviacion.gq',
+    phone: '+240 333 093 002',
+    whatsapp: '+240 555 093 002',
+    contactPerson: 'Director del Aeropuerto de Bata'
+  },
+  {
+    id: 'e_avia_ceiba',
+    name: 'CEIBA Intercontinental',
+    code: 'CEIBA',
+    color: '#67e8f9',
+    type: 'public',
+    sector: 'aviacion',
+    email: 'info@ceibaintercontinental.com',
+    phone: '+240 333 093 010',
+    contactPerson: 'Director General CEIBA'
   },
 
   // === SECTOR: COOPERACIÓN INTERNACIONAL ===
@@ -229,35 +414,238 @@ export const entities: Entity[] = [
     contactPerson: 'Coordinador AECID'
   },
 
-  // === OTHER GOVERNMENT ENTITIES ===
+  // === GOBIERNO DE GUINEA ECUATORIAL (2024-2025) ===
+  // Presidencia
+  {
+    id: 'e_gov_presidencia',
+    name: 'Presidencia de la República',
+    code: 'PR',
+    color: '#1e3a5f',
+    type: 'government',
+    email: 'presidencia@gobierno.gob.gq',
+    phone: '+240 333 000 001',
+    contactPerson: 'Gabinete Presidencial'
+  },
+  {
+    id: 'e_gov_vicepresidencia',
+    name: 'Vicepresidencia de la República',
+    code: 'VPR',
+    color: '#2d4a6f',
+    type: 'government',
+    email: 'vicepresidencia@gobierno.gob.gq',
+    phone: '+240 333 000 002',
+    contactPerson: 'Gabinete Vicepresidencial'
+  },
+  {
+    id: 'e_gov_pm',
+    name: 'Primer Ministro',
+    code: 'PM',
+    color: '#3d5a7f',
+    type: 'government',
+    email: 'primerministro@gobierno.gob.gq',
+    phone: '+240 333 000 003',
+    contactPerson: 'Secretaría del Primer Ministro'
+  },
+
+  // Ministerios (según organigrama oficial)
+  {
+    id: 'e_gov_estado_presidencia',
+    name: 'Ministerio de Estado a la Presidencia del Gobierno',
+    code: 'MEPG',
+    color: '#4a5568',
+    type: 'government',
+    email: 'estado.presidencia@gobierno.gob.gq',
+    phone: '+240 333 100 001',
+    contactPerson: 'Sergio Esono Abeso Tomo'
+  },
+  {
+    id: 'e_gov_seguridad',
+    name: 'Ministerio de Estado de Seguridad Nacional',
+    code: 'MESN',
+    color: '#742a2a',
+    type: 'government',
+    email: 'seguridad.nacional@gobierno.gob.gq',
+    phone: '+240 333 100 002',
+    contactPerson: 'Nicolás Obama Nchama'
+  },
+  {
+    id: 'e_gov_exteriores',
+    name: 'Ministerio de Estado de Asuntos Exteriores, Cooperación Internacional y Diáspora',
+    code: 'MAECD',
+    color: '#1e40af',
+    type: 'government',
+    email: 'exteriores@gobierno.gob.gq',
+    phone: '+240 333 100 003',
+    contactPerson: 'Simeón Oyono Esono Angüe'
+  },
+  {
+    id: 'e_gov_interior',
+    name: 'Ministerio del Interior y Corporaciones Locales',
+    code: 'MICL',
+    color: '#7c2d12',
+    type: 'government',
+    email: 'interior@gobierno.gob.gq',
+    phone: '+240 333 100 004',
+    contactPerson: 'Victoriano Engonga Kea'
+  },
+  {
+    id: 'e_gov_educacion',
+    name: 'Ministerio de Estado de Educación, Ciencias, Enseñanza Profesional y Deportes',
+    code: 'MECED',
+    color: '#15803d',
+    type: 'government',
+    email: 'educacion@gobierno.gob.gq',
+    phone: '+240 333 100 005',
+    contactPerson: 'Clemente Engonga Nguema Onguene'
+  },
+  {
+    id: 'e_gov_obras',
+    name: 'Ministerio de Obras Públicas y Urbanismo',
+    code: 'MOPU',
+    color: '#b45309',
+    type: 'government',
+    email: 'obras.publicas@gobierno.gob.gq',
+    phone: '+240 333 100 006',
+    contactPerson: 'Clemente Ferreiro Villarino'
+  },
+  {
+    id: 'e_gov_informacion',
+    name: 'Ministerio de Estado de Información, Prensa y Cultura',
+    code: 'MEIPC',
+    color: '#7e22ce',
+    type: 'government',
+    email: 'informacion@gobierno.gob.gq',
+    phone: '+240 333 100 007',
+    contactPerson: 'Jerónimo Osa Osa Ecoro'
+  },
+  {
+    id: 'e_gov_gabinete',
+    name: 'Ministerio a la Presidencia, Gabinete Civil',
+    code: 'MPGC',
+    color: '#374151',
+    type: 'government',
+    email: 'gabinete.civil@gobierno.gob.gq',
+    phone: '+240 333 100 008',
+    contactPerson: 'Ramón Nka Ela Nchama'
+  },
+  {
+    id: 'e_gov_defensa',
+    name: 'Ministerio de Defensa Nacional',
+    code: 'MDN',
+    color: '#166534',
+    type: 'government',
+    email: 'defensa@gobierno.gob.gq',
+    phone: '+240 333 100 009',
+    contactPerson: 'Victoriano Nsue Okomo'
+  },
   {
     id: 'e_gov_hacienda',
-    name: 'Ministerio de Hacienda y Presupuestos',
-    code: 'MHP',
+    name: 'Ministerio de Hacienda, Planificación y Desarrollo Económico',
+    code: 'MHPDE',
     color: '#dc2626',
     type: 'government',
-    email: 'info@hacienda.gob.gq',
-    phone: '+240 333 100 004',
-    contactPerson: 'Secretaría General'
+    email: 'hacienda@gobierno.gob.gq',
+    phone: '+240 333 100 010',
+    contactPerson: 'Iván Bacale Ebe Molina'
+  },
+  {
+    id: 'e_gov_funcion',
+    name: 'Ministerio de la Función Pública, Reforma Administrativa y Seguridad Social',
+    code: 'MFPRAS',
+    color: '#0369a1',
+    type: 'government',
+    email: 'funcion.publica@gobierno.gob.gq',
+    phone: '+240 333 100 011',
+    contactPerson: 'Cándido Muatethema Bahita'
   },
   {
     id: 'e_gov_trabajo',
-    name: 'Ministerio de Trabajo y Seguridad Social',
-    code: 'MTSS',
+    name: 'Ministerio de Trabajo, Empleo y Seguridad Social',
+    code: 'MTESS',
     color: '#ea580c',
     type: 'government',
-    email: 'info@trabajo.gob.gq',
-    phone: '+240 333 100 005',
-    contactPerson: 'Secretaría General'
+    email: 'trabajo@gobierno.gob.gq',
+    phone: '+240 333 100 012',
+    contactPerson: 'Alfredo Mitogo Mitogo Ada'
+  },
+  {
+    id: 'e_gov_agricultura',
+    name: 'Ministerio de Agricultura, Ganadería, Bosques, Pesca y Medio Ambiente',
+    code: 'MAGBPMA',
+    color: '#166534',
+    type: 'government',
+    email: 'agricultura@gobierno.gob.gq',
+    phone: '+240 333 100 013',
+    contactPerson: 'Juan José Ndong Tomo'
+  },
+  {
+    id: 'e_gov_hidrocarburos',
+    name: 'Ministerio de Hidrocarburos y Desarrollo Minero',
+    code: 'MHDM',
+    color: '#78350f',
+    type: 'government',
+    email: 'hidrocarburos@gobierno.gob.gq',
+    phone: '+240 333 100 014',
+    contactPerson: 'Antonio Oburu Ondo'
+  },
+  {
+    id: 'e_gov_electricidad',
+    name: 'Ministerio de Electricidad y Energías Renovables',
+    code: 'MEER',
+    color: '#fbbf24',
+    type: 'government',
+    email: 'electricidad@gobierno.gob.gq',
+    phone: '+240 333 100 015',
+    contactPerson: 'Gervasio Engonga Mba'
+  },
+  {
+    id: 'e_gov_turismo',
+    name: 'Ministerio de Turismo e Infraestructuras Turísticas',
+    code: 'MTIT',
+    color: '#0891b2',
+    type: 'government',
+    email: 'turismo@gobierno.gob.gq',
+    phone: '+240 333 100 016',
+    contactPerson: 'Antonio Oliveira Borupu'
+  },
+  {
+    id: 'e_gov_igualdad',
+    name: 'Ministerio de Igualdad de Género, Asuntos Sociales y Artesanía',
+    code: 'MIGASA',
+    color: '#db2777',
+    type: 'government',
+    email: 'igualdad@gobierno.gob.gq',
+    phone: '+240 333 100 017',
+    contactPerson: 'Consuelo Nguema Oyana'
+  },
+  {
+    id: 'e_gov_aviacion',
+    name: 'Ministerio de Aviación Civil e Infraestructuras Aeroportuarias',
+    code: 'MACIA',
+    color: '#0ea5e9',
+    type: 'government',
+    email: 'aviacion@gobierno.gob.gq',
+    phone: '+240 333 100 018',
+    contactPerson: 'Bartolomé Monsuy Mañe Andeme'
   },
   {
     id: 'e_gov_justicia',
-    name: 'Ministerio de Justicia',
-    code: 'MJ',
+    name: 'Ministerio de Justicia, Culto e Instituciones Penitenciarias',
+    code: 'MJCIP',
     color: '#be185d',
     type: 'government',
-    email: 'info@justicia.gob.gq',
-    phone: '+240 333 100 006',
+    email: 'justicia@gobierno.gob.gq',
+    phone: '+240 333 100 019',
+    contactPerson: 'Secretaría General'
+  },
+  {
+    id: 'e_gov_sanidad',
+    name: 'Ministerio de Sanidad y Bienestar Social',
+    code: 'MSBS',
+    color: '#dc2626',
+    type: 'government',
+    email: 'sanidad@gobierno.gob.gq',
+    phone: '+240 333 100 020',
     contactPerson: 'Secretaría General'
   },
 ];
@@ -293,6 +681,152 @@ export const tags = [
   'Archivo',
 ];
 
+// Document Templates - Official MTTSIA Templates
+// Based on: Plantillas_Comunicacion_Institucional_MTTSIA.docx
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  nameEs: string;
+  code: string;
+  description: string;
+  category: 'comunicacion' | 'administrativo' | 'normativo';
+  fields: string[]; // Required fields for the template
+  headerText: string;
+  footerText: string;
+  signatureRequired: boolean;
+  sampleContent: string;
+}
+
+export const documentTemplates: DocumentTemplate[] = [
+  {
+    id: 'tpl_circular',
+    name: 'Circular Interna',
+    nameEs: 'Circular Interna',
+    code: 'CIR',
+    description: 'Comunicación interna para todas las unidades del Departamento',
+    category: 'comunicacion',
+    fields: ['numero', 'de', 'a', 'asunto', 'fecha', 'disposiciones'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL',
+    footerText: 'La presente Circular será de obligado cumplimiento para todas las unidades del Departamento.\nEntrará en vigor a partir de la fecha de su firma.',
+    signatureRequired: true,
+    sampleContent: 'Visto el marco organizativo y las competencias atribuidas a este Departamento Ministerial,\n\nSE DISPONE LO SIGUIENTE:\n\n1. ________________________________________________\n2. ________________________________________________\n3. ________________________________________________'
+  },
+  {
+    id: 'tpl_comunicado',
+    name: 'Comunicado Oficial',
+    nameEs: 'Comunicado Institucional',
+    code: 'COM',
+    description: 'Comunicación oficial para la opinión pública',
+    category: 'comunicacion',
+    fields: ['contenido', 'fecha'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL\n\nCOMUNICADO INSTITUCIONAL',
+    footerText: 'Con ello, este Departamento reafirma su compromiso con:\n— la transparencia institucional\n— la mejora de los servicios públicos\n— el fortalecimiento del sector estratégico correspondiente',
+    signatureRequired: false,
+    sampleContent: 'El Ministerio de Transportes, Telecomunicaciones y Sistemas de Inteligencia Artificial informa a la opinión pública que:\n\n[Exposición clara, breve y objetiva]'
+  },
+  {
+    id: 'tpl_nota_prensa',
+    name: 'Nota de Prensa',
+    nameEs: 'Nota de Prensa',
+    code: 'NP',
+    description: 'Comunicación para medios de comunicación',
+    category: 'comunicacion',
+    fields: ['titulo', 'lugar', 'fecha', 'parrafo1', 'contexto', 'declaracion', 'proximas_acciones'],
+    headerText: 'NOTA DE PRENSA',
+    footerText: 'Contacto prensa institucional:\nCorreo: comunicacion@mttsia.gob.gq\nTeléfono: +240 222 100 050',
+    signatureRequired: false,
+    sampleContent: 'Título informativo breve\n\nMalabo — [Fecha]\n\nPárrafo 1 — Información esencial (Quién / Qué / Dónde / Cuándo)\n\nPárrafo 2 — Contexto institucional\n\nPárrafo 3 — Declaración oficial\n\nPárrafo 4 — Próximas acciones o relevancia sectorial'
+  },
+  {
+    id: 'tpl_oficio',
+    name: 'Oficio Administrativo',
+    nameEs: 'Oficio Administrativo',
+    code: 'OFI',
+    description: 'Comunicación administrativa formal',
+    category: 'administrativo',
+    fields: ['numero', 'de', 'a', 'asunto', 'fecha', 'motivos', 'solicitud'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL',
+    footerText: 'Sin otro particular, agradezco su colaboración.',
+    signatureRequired: true,
+    sampleContent: 'Tengo a bien dirigirme a Usted en relación con _______________________________\n\n[Exposición de motivos]\n\nPor lo anterior, se solicita / comunica / informa:\n\n__________________________________________________'
+  },
+  {
+    id: 'tpl_carta',
+    name: 'Carta Institucional',
+    nameEs: 'Carta Institucional',
+    code: 'CAR',
+    description: 'Comunicación diplomática o técnica formal',
+    category: 'comunicacion',
+    fields: ['destinatario', 'tratamiento', 'contenido', 'fecha'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL',
+    footerText: 'Este Ministerio reafirma su voluntad de fortalecer la cooperación institucional y promover el desarrollo sectorial.\n\nAprovecho la ocasión para reiterar mi más alta consideración.',
+    signatureRequired: true,
+    sampleContent: 'Muy Ilustre / Excelentísimo / Estimado Señor:\n\nMe complace dirigirme a Usted para expresar que:\n\n[Redacción diplomática / técnica]'
+  },
+  {
+    id: 'tpl_acta',
+    name: 'Acta Administrativa',
+    nameEs: 'Acta Administrativa',
+    code: 'ACT',
+    description: 'Registro de reuniones y sesiones',
+    category: 'administrativo',
+    fields: ['numero', 'lugar', 'fecha', 'asistentes', 'orden_dia', 'desarrollo', 'acuerdos'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL\n\nACTA ADMINISTRATIVA',
+    footerText: 'Y no habiendo más asuntos que tratar, se levanta la presente acta.',
+    signatureRequired: true,
+    sampleContent: 'Reunión celebrada en:\nFecha:\nAsistentes:\n\nORDEN DEL DÍA:\n1.\n2.\n\nDESARROLLO DE LA SESIÓN:\n[Descripción objetiva de los temas tratados]\n\nACUERDOS ADOPTADOS:\n1.\n2.'
+  },
+  {
+    id: 'tpl_resolucion',
+    name: 'Resolución Ministerial',
+    nameEs: 'Resolución Ministerial',
+    code: 'RES',
+    description: 'Acto administrativo con efectos jurídicos',
+    category: 'normativo',
+    fields: ['numero', 'visto', 'considerando', 'articulos', 'fecha'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL\n\nRESOLUCIÓN MINISTERIAL',
+    footerText: 'La presente Resolución entrará en vigor a partir de su firma.\n\nPublíquese, comuníquese y archívese.',
+    signatureRequired: true,
+    sampleContent: 'El Ministro de Transportes, Telecomunicaciones y Sistemas de Inteligencia Artificial,\n\nVisto…\n\nConsiderando…\n\nRESUELVE\n\nArtículo 1.º — ____________________________________\n\nArtículo 2.º — ____________________________________\n\nArtículo 3.º — ____________________________________'
+  },
+  {
+    id: 'tpl_orden',
+    name: 'Orden Ministerial',
+    nameEs: 'Orden Ministerial',
+    code: 'ORD',
+    description: 'Disposición normativa del Ministerio',
+    category: 'normativo',
+    fields: ['numero', 'disposiciones', 'fecha'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL\n\nORDEN MINISTERIAL',
+    footerText: 'Quedan derogadas cuantas disposiciones se opongan a la presente Orden.',
+    signatureRequired: true,
+    sampleContent: 'En uso de las competencias atribuidas,\n\nDISPONGO\n\nArtículo 1.º — ____________________________________\n\nArtículo 2.º — ____________________________________\n\nArtículo 3.º — ____________________________________'
+  },
+  {
+    id: 'tpl_instruccion',
+    name: 'Instrucción Interna',
+    nameEs: 'Instrucción Interna',
+    code: 'INS',
+    description: 'Instrucciones operativas para unidades internas',
+    category: 'administrativo',
+    fields: ['numero', 'dirigida_a', 'objeto', 'contenido'],
+    headerText: 'REPÚBLICA DE GUINEA ECUATORIAL\nMINISTERIO DE TRANSPORTES, TELECOMUNICACIONES Y SISTEMAS DE INTELIGENCIA ARTIFICIAL\n\nINSTRUCCIÓN INTERNA',
+    footerText: 'Entrada en aplicación inmediata.',
+    signatureRequired: true,
+    sampleContent: 'Dirigida a:\nObjeto:\n\nContenido operativo:\n\n[Instrucciones detalladas]'
+  },
+];
+
+// Helper function to get template by ID
+export function getTemplateById(id: string): DocumentTemplate | undefined {
+  return documentTemplates.find(t => t.id === id);
+}
+
+// Helper function to get templates by category
+export function getTemplatesByCategory(category: DocumentTemplate['category']): DocumentTemplate[] {
+  return documentTemplates.filter(t => t.category === category);
+}
+
 // Documents
 export interface Document {
   id: string;
@@ -316,6 +850,8 @@ export interface Document {
   aiSummary?: string;
   aiProposedResponse?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
+  templateId?: string; // Reference to document template
+  receivedVia?: ('physical' | 'electronic')[]; // Support for dual-entry (physical AND electronic)
 }
 
 const now = new Date();
@@ -478,7 +1014,7 @@ export const documents: Document[] = [
     correlativeNumber: 'ENT-2024-001536',
     title: 'Propuesta de modernización portuaria',
     type: 'Memorando',
-    entityId: 'e_port_ap', // Autoridad Portuaria (Public)
+    entityId: 'e_port_malabo', // Administración del Puerto de Malabo (Public)
     responsibleId: 'u3',
     status: 'pending',
     direction: 'in',
@@ -570,7 +1106,7 @@ export const expedientes: Expediente[] = [
     id: 'exp4',
     number: 'EXP-2024-00339',
     title: 'Modernización infraestructura portuaria',
-    entityId: 'e_port_ap', // Autoridad Portuaria (Public)
+    entityId: 'e_port_malabo', // Administración del Puerto de Malabo (Public)
     responsibleId: 'u3',
     status: 'open',
     priority: 'medium',
@@ -926,6 +1462,8 @@ export const entityTypeLabels: Record<Entity['type'], string> = {
 
 export const sectorLabels: Record<string, string> = {
   telecomunicaciones: 'Telecomunicaciones',
-  portuario: 'Sector Portuario',
+  portuario: 'Sector Portuario y Marítimo',
+  transporte_terrestre: 'Transporte Terrestre',
+  aviacion: 'Aviación Civil',
   cooperacion: 'Cooperación Internacional',
 };
