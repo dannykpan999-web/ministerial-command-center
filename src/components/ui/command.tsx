@@ -30,14 +30,15 @@ const CommandDialog = ({ children, title = "Búsqueda rápida", onClose, ...prop
   return (
     <Dialog {...props}>
       <DialogContent
+        hideCloseButton
         className={cn(
           "overflow-hidden p-0 shadow-2xl border-0",
-          // Mobile: Full screen bottom sheet style
-          "fixed inset-x-0 bottom-0 top-auto sm:inset-auto",
+          // Mobile: Full width with proper margins
+          "fixed left-3 right-3 bottom-3 top-auto sm:inset-auto",
           "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]",
-          "max-h-[85vh] sm:max-h-[80vh]",
-          "w-full sm:max-w-xl",
-          "rounded-t-2xl sm:rounded-2xl",
+          "max-h-[80vh] sm:max-h-[80vh]",
+          "w-auto sm:w-full sm:max-w-xl",
+          "rounded-2xl",
           // Animation
           "data-[state=open]:animate-slide-in-bottom sm:data-[state=open]:animate-scale-in",
           "data-[state=closed]:animate-fade-out"

@@ -98,35 +98,35 @@ export default function SignaturePage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in safe-area-inset">
       <PageHeader
         title={t('signature.title')}
         description={t('signature.description')}
         action={
-          <Button>
-            <PenTool className="h-4 w-4 mr-2" />
-            Nuevo flujo de firma
+          <Button size="sm" className="h-9 sm:h-10">
+            <PenTool className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Nuevo flujo de firma</span>
           </Button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Flows List */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="pending">
-            <TabsList className="mb-4">
-              <TabsTrigger value="pending" className="gap-2">
-                <Clock className="h-4 w-4" />
-                {t('signature.pending')}
-                <Badge variant="secondary" className="ml-1">{pendingFlows.length}</Badge>
+            <TabsList className="mb-4 w-full justify-start overflow-x-auto">
+              <TabsTrigger value="pending" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{t('signature.pending')}</span>
+                <Badge variant="secondary" className="ml-1 text-[10px] sm:text-xs">{pendingFlows.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="signed" className="gap-2">
-                <CheckCircle className="h-4 w-4" />
-                {t('signature.signed')}
+              <TabsTrigger value="signed" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{t('signature.signed')}</span>
               </TabsTrigger>
-              <TabsTrigger value="rejected" className="gap-2">
-                <XCircle className="h-4 w-4" />
-                {t('signature.rejected')}
+              <TabsTrigger value="rejected" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{t('signature.rejected')}</span>
               </TabsTrigger>
             </TabsList>
 

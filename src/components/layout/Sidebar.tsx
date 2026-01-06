@@ -296,49 +296,53 @@ export function Sidebar() {
       {/* Mobile Bottom Navigation */}
       <nav className={cn(
         "fixed bottom-0 left-0 right-0 z-40 lg:hidden",
-        "bg-card/95 backdrop-blur-lg border-t shadow-lg"
+        "bg-card/95 backdrop-blur-lg border-t shadow-lg",
+        "safe-area-bottom"
       )}
-      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
       >
-        <div className="flex items-center justify-around px-2 py-1.5">
+        <div className="flex items-center justify-evenly px-1 py-1">
           {mobileNavItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
+
+            // Short labels for mobile
+            const shortLabels: Record<string, string> = {
+              'nav.inicio': 'Inicio',
+              'nav.bandeja_entrada': 'Bandeja',
+              'nav.expedientes': 'Expedientes',
+              'nav.asistente': 'Asistente',
+              'nav.ajustes': 'Ajustes',
+            };
 
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'relative flex flex-col items-center justify-center py-2 px-4 min-w-[60px] rounded-xl',
+                  'relative flex flex-col items-center justify-center py-1.5 px-2 flex-1 max-w-[72px]',
                   'transition-all duration-200 active:scale-95',
                   isActive
                     ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground'
                 )}
               >
                 {/* Active indicator */}
                 {isActive && (
-                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full" />
+                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full" />
                 )}
 
-                {/* Icon container */}
-                <div className={cn(
-                  'flex items-center justify-center h-8 w-8 rounded-lg transition-all duration-200',
-                  isActive && 'bg-primary/10 scale-110'
-                )}>
-                  <Icon className={cn(
-                    'h-5 w-5 transition-transform',
-                    isActive && 'scale-105'
-                  )} />
-                </div>
+                {/* Icon */}
+                <Icon className={cn(
+                  'h-5 w-5 mb-0.5',
+                  isActive && 'text-primary'
+                )} />
 
                 {/* Label */}
                 <span className={cn(
-                  'text-[10px] font-medium mt-0.5 truncate max-w-[60px]',
-                  isActive && 'font-semibold'
+                  'text-[9px] leading-tight text-center',
+                  isActive ? 'font-semibold text-primary' : 'font-medium'
                 )}>
-                  {t(item.key).split(' ')[0]}
+                  {shortLabels[item.key] || t(item.key).split(' ')[0]}
                 </span>
               </Link>
             );
