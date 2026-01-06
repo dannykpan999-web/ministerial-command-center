@@ -117,70 +117,73 @@ export default function CasesPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in safe-area-inset">
       <PageHeader
         title={t('cases.title')}
         description={t('cases.description')}
         action={
-          <Button onClick={() => navigate('/cases/new')}>
-            <Plus className="h-4 w-4 mr-2" />
-            {t('cases.create_new')}
+          <Button onClick={() => navigate('/cases/new')} size="sm" className="h-9 sm:h-10">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">{t('cases.create_new')}</span>
           </Button>
         }
       />
 
-      {/* Saved Views */}
-      <div className="flex gap-2 mb-6">
-        <span className="text-sm text-muted-foreground self-center mr-2">{t('cases.saved_views')}:</span>
+      {/* Saved Views - Horizontal scroll on mobile */}
+      <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+        <span className="text-xs sm:text-sm text-muted-foreground self-center mr-1 sm:mr-2 shrink-0 hidden sm:inline">{t('cases.saved_views')}:</span>
         {savedViews.map(view => (
           <Button
             key={view.id}
             variant={activeView === view.id ? 'secondary' : 'outline'}
             size="sm"
             onClick={() => applyView(activeView === view.id ? '' : view.id)}
+            className="shrink-0 h-8 sm:h-9 text-xs sm:text-sm"
           >
-            <view.icon className="h-4 w-4 mr-1" />
-            {view.label}
+            <view.icon className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">{view.label}</span>
           </Button>
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      {/* Filters - Grid on mobile */}
+      <div className="flex flex-col gap-3 mb-4 sm:mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t('common.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-10"
           />
         </div>
-        <Select value={entityFilter} onValueChange={setEntityFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder={t('inbox.all_entities')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
-            {entities.map(entity => (
-              <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder={t('inbox.all_statuses')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
-            <SelectItem value="open">Abierto</SelectItem>
-            <SelectItem value="pending_signature">Pendiente firma</SelectItem>
-            <SelectItem value="closed">Cerrado</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 sm:flex gap-2">
+          <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-48">
+              <SelectValue placeholder={t('inbox.all_entities')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
+              {entities.map(entity => (
+                <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-40">
+              <SelectValue placeholder={t('inbox.all_statuses')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
+              <SelectItem value="open">Abierto</SelectItem>
+              <SelectItem value="pending_signature">Pendiente firma</SelectItem>
+              <SelectItem value="closed">Cerrado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Table */}
+      {/* Content */}
       {loading ? (
         <DataTableSkeleton columns={6} rows={5} />
       ) : filteredExpedientes.length === 0 ? (
@@ -194,69 +197,130 @@ export default function CasesPage() {
           }}
         />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Expediente</TableHead>
-                <TableHead>Entidad</TableHead>
-                <TableHead>Responsable</TableHead>
-                <TableHead>Prioridad</TableHead>
-                <TableHead>Actualizado</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredExpedientes.map((exp) => {
-                const entity = getEntityById(exp.entityId);
-                const responsible = getUserById(exp.responsibleId);
-                return (
-                  <TableRow
-                    key={exp.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/cases/${exp.id}`)}
-                  >
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{exp.title}</p>
+        <>
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-2">
+            {filteredExpedientes.map((exp) => {
+              const entity = getEntityById(exp.entityId);
+              const responsible = getUserById(exp.responsibleId);
+              return (
+                <div
+                  key={exp.id}
+                  className="relative bg-card rounded-xl border overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                  onClick={() => navigate(`/cases/${exp.id}`)}
+                >
+                  {/* Priority indicator */}
+                  <div className={cn(
+                    "absolute left-0 top-0 bottom-0 w-1",
+                    exp.priority === 'urgent' ? 'bg-destructive' :
+                    exp.priority === 'high' ? 'bg-warning' :
+                    exp.priority === 'medium' ? 'bg-info' : 'bg-muted'
+                  )} />
+
+                  <div className="p-3 pl-4">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{exp.title}</p>
                         <p className="text-xs text-muted-foreground font-mono">{exp.number}</p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
-                          style={{ backgroundColor: entity?.color }}
-                        >
-                          {entity?.code}
-                        </div>
-                        <span className="text-sm">{entity?.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{responsible?.name}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('text-xs', priorityColors[exp.priority])}>
-                        {priorityLabels[exp.priority]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {format(exp.updatedAt, 'dd MMM yyyy', { locale: es })}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge variant={statusVariants[exp.status]}>
+                      <StatusBadge variant={statusVariants[exp.status]} className="text-[10px] shrink-0">
                         {statusLabels[exp.status]}
                       </StatusBadge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                    </div>
+
+                    {/* Entity row */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div
+                        className="h-5 w-5 rounded text-[10px] font-semibold flex items-center justify-center text-primary-foreground shrink-0"
+                        style={{ backgroundColor: entity?.color }}
+                      >
+                        {entity?.code}
+                      </div>
+                      <span className="text-xs text-muted-foreground truncate">{entity?.name}</span>
+                    </div>
+
+                    {/* Footer row */}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="truncate">{responsible?.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', priorityColors[exp.priority])}>
+                          {priorityLabels[exp.priority]}
+                        </Badge>
+                        <span>{format(exp.updatedAt, 'dd MMM', { locale: es })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Expediente</TableHead>
+                  <TableHead>Entidad</TableHead>
+                  <TableHead>Responsable</TableHead>
+                  <TableHead>Prioridad</TableHead>
+                  <TableHead>Actualizado</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExpedientes.map((exp) => {
+                  const entity = getEntityById(exp.entityId);
+                  const responsible = getUserById(exp.responsibleId);
+                  return (
+                    <TableRow
+                      key={exp.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/cases/${exp.id}`)}
+                    >
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{exp.title}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{exp.number}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
+                            style={{ backgroundColor: entity?.color }}
+                          >
+                            {entity?.code}
+                          </div>
+                          <span className="text-sm">{entity?.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{responsible?.name}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-xs', priorityColors[exp.priority])}>
+                          {priorityLabels[exp.priority]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {format(exp.updatedAt, 'dd MMM yyyy', { locale: es })}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge variant={statusVariants[exp.status]}>
+                          {statusLabels[exp.status]}
+                        </StatusBadge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
     </div>
   );

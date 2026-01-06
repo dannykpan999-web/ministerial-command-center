@@ -155,54 +155,56 @@ export default function InboxPage() {
         }
       />
 
-      {/* Classification Tabs */}
-      <div className="flex gap-2 mb-4 animate-fade-in-up">
+      {/* Classification Tabs - Scrollable on mobile */}
+      <div className="flex gap-2 mb-4 animate-fade-in-up overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
         <Button
           variant={classificationFilter === 'all' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setClassificationFilter('all')}
-          className="rounded-full"
+          className="rounded-full shrink-0 h-9"
         >
-          <FileText className="h-4 w-4 mr-1.5" />
-          Todos
+          <FileText className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Todos</span>
         </Button>
         <Button
           variant={classificationFilter === 'internal' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setClassificationFilter('internal')}
-          className="rounded-full"
+          className="rounded-full shrink-0 h-9"
         >
-          <Home className="h-4 w-4 mr-1.5" />
-          Internos
+          <Home className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Internos</span>
         </Button>
         <Button
           variant={classificationFilter === 'external' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setClassificationFilter('external')}
-          className="rounded-full"
+          className="rounded-full shrink-0 h-9"
         >
-          <ExternalLink className="h-4 w-4 mr-1.5" />
-          Externos
+          <ExternalLink className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Externos</span>
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-        <div className="relative flex-1">
+      {/* Filters - Stack on mobile */}
+      <div className="flex flex-col gap-2 mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+        {/* Search bar */}
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t('common.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10"
+            className="pl-9 h-11 text-base sm:text-sm"
           />
         </div>
-        <div className="flex gap-2">
+        {/* Filter dropdowns - side by side on mobile */}
+        <div className="grid grid-cols-2 sm:flex gap-2">
           <Select value={entityFilter} onValueChange={setEntityFilter}>
-            <SelectTrigger className="w-full sm:w-48 h-10">
-              <SelectValue placeholder={t('inbox.all_entities')} />
+            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-48">
+              <SelectValue placeholder="Entidad" />
             </SelectTrigger>
-            <SelectContent className="max-h-80">
+            <SelectContent className="max-h-[60vh] sm:max-h-80">
               <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
               {/* Group by entity type */}
               {(['internal', 'public', 'private', 'government'] as const).map(type => {
@@ -224,7 +226,7 @@ export default function InboxPage() {
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: entity.color }}
                           />
-                          <span className="truncate">{entity.name}</span>
+                          <span className="truncate text-xs sm:text-sm">{entity.name}</span>
                         </span>
                       </SelectItem>
                     ))}
@@ -234,8 +236,8 @@ export default function InboxPage() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-36 h-10">
-              <SelectValue placeholder={t('inbox.all_statuses')} />
+            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-36">
+              <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
@@ -398,158 +400,131 @@ export default function InboxPage() {
             </Table>
           </div>
 
-          {/* Mobile Card List - Beautiful redesign */}
-          <div className="md:hidden space-y-3">
+          {/* Mobile Card List - Compact iPhone-optimized design */}
+          <div className="md:hidden space-y-2">
             {filteredDocs.map((doc, index) => {
               const entity = getEntityById(doc.entityId);
-              const responsible = getUserById(doc.responsibleId);
               const isSelected = selectedIds.includes(doc.id);
               return (
                 <div
                   key={doc.id}
                   className={`
-                    relative bg-card rounded-2xl border-2 overflow-hidden
-                    transition-all duration-300 ease-out
-                    hover:shadow-lg hover:border-primary/30
-                    active:scale-[0.98]
-                    animate-fade-in-up
-                    ${isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border/50'}
+                    relative bg-card rounded-xl border overflow-hidden
+                    transition-all duration-200 ease-out
+                    active:scale-[0.99] active:bg-muted/50
+                    ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border'}
                   `}
-                  style={{ animationDelay: `${index * 0.05}s` }}
+                  style={{ animationDelay: `${index * 0.03}s` }}
                 >
                   {/* Status accent bar */}
                   <div
-                    className={`absolute top-0 left-0 right-0 h-1 ${
+                    className={`absolute top-0 left-0 right-0 h-0.5 ${
                       doc.status === 'pending' ? 'bg-warning' :
                       doc.status === 'in_progress' ? 'bg-info' :
                       doc.status === 'completed' ? 'bg-success' : 'bg-muted'
                     }`}
                   />
 
-                  <div className="p-4 pt-5">
-                    {/* Header with checkbox and status */}
-                    <div className="flex items-start gap-3">
+                  <div className="p-3">
+                    {/* Header row */}
+                    <div className="flex items-start gap-2.5">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleSelect(doc.id)}
-                        className="mt-0.5 h-5 w-5"
+                        className="mt-1 h-4 w-4"
                       />
                       <div className="flex-1 min-w-0">
+                        {/* Title and status */}
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-sm leading-tight line-clamp-2">{doc.title}</h3>
-                            <p className="text-xs text-muted-foreground mt-1 font-mono">{doc.correlativeNumber}</p>
-                          </div>
+                          <h3 className="font-medium text-[13px] leading-tight line-clamp-2 flex-1">{doc.title}</h3>
                           <StatusBadge
                             variant={statusVariants[doc.status]}
-                            className="shrink-0 text-[10px] px-2 py-0.5"
+                            className="shrink-0 text-[9px] px-1.5 py-0.5 h-5"
                           >
                             {statusLabels[doc.status]}
                           </StatusBadge>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Entity and info section */}
-                    <div className="mt-4 flex items-center gap-3 p-3 rounded-xl bg-muted/50">
-                      <div
-                        className="h-10 w-10 rounded-xl text-xs font-bold flex items-center justify-center text-white shadow-sm shrink-0"
-                        style={{ backgroundColor: entity?.color }}
-                      >
-                        {entity?.code}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{entity?.name}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          {entity?.type === 'internal' && <><Home className="h-3 w-3" />Interno</>}
-                          {entity?.type === 'public' && <><Landmark className="h-3 w-3" />Empresa Pública</>}
-                          {entity?.type === 'private' && <><Briefcase className="h-3 w-3" />Privada</>}
-                          {entity?.type === 'government' && <><Building2 className="h-3 w-3" />Gobierno</>}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs text-muted-foreground">Recibido</p>
-                        <p className="text-sm font-medium">{format(doc.createdAt, 'dd MMM', { locale: es })}</p>
-                      </div>
-                    </div>
+                        {/* Entity row - compact */}
+                        <div className="mt-2 flex items-center gap-2">
+                          <div
+                            className="h-6 w-6 rounded-md text-[9px] font-bold flex items-center justify-center text-white shrink-0"
+                            style={{ backgroundColor: entity?.color }}
+                          >
+                            {entity?.code?.slice(0, 3)}
+                          </div>
+                          <span className="text-xs text-muted-foreground truncate flex-1">{entity?.name}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {format(doc.createdAt, 'dd/MM', { locale: es })}
+                          </span>
+                        </div>
 
-                    {/* Classification badge */}
-                    <div className="mt-3 flex items-center gap-2">
-                      <Badge variant={doc.classification === 'internal' ? 'secondary' : 'outline'} className="text-[10px]">
-                        {doc.classification === 'internal' ? (
-                          <><Home className="h-3 w-3 mr-1" />Interno</>
-                        ) : (
-                          <><ExternalLink className="h-3 w-3 mr-1" />Externo</>
-                        )}
-                      </Badge>
-                      {doc.aiSummary && (
-                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-                          <Sparkles className="h-3 w-3 mr-1" />IA
-                        </Badge>
-                      )}
-                      {doc.decretedTo && doc.decretedTo.length > 0 && (
-                        <Badge variant="outline" className="text-[10px] text-orange-500 border-orange-500/30">
-                          <Building2 className="h-3 w-3 mr-1" />{doc.decretedTo.length}
-                        </Badge>
-                      )}
-                    </div>
+                        {/* Badges row - minimal */}
+                        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                          <Badge
+                            variant={doc.classification === 'internal' ? 'secondary' : 'outline'}
+                            className="text-[9px] h-5 px-1.5"
+                          >
+                            {doc.classification === 'internal' ? 'Int' : 'Ext'}
+                          </Badge>
+                          {doc.aiSummary && (
+                            <Badge variant="outline" className="text-[9px] h-5 px-1.5 text-primary border-primary/30">
+                              <Sparkles className="h-2.5 w-2.5 mr-0.5" />IA
+                            </Badge>
+                          )}
+                          {doc.decretedTo && doc.decretedTo.length > 0 && (
+                            <Badge variant="outline" className="text-[9px] h-5 px-1.5 text-orange-500 border-orange-500/30">
+                              <Building2 className="h-2.5 w-2.5 mr-0.5" />{doc.decretedTo.length}
+                            </Badge>
+                          )}
 
-                    {/* Actions */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-3 text-xs rounded-lg"
-                          onClick={(e) => { e.stopPropagation(); openAIPanel(doc); }}
-                        >
-                          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                          Resumen
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-3 text-xs rounded-lg"
-                          onClick={(e) => { e.stopPropagation(); openDecreeDialog(doc); }}
-                        >
-                          <Building2 className="h-3.5 w-3.5 mr-1.5" />
-                          Decretar
-                        </Button>
+                          {/* Quick actions - inline */}
+                          <div className="ml-auto flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 rounded-md"
+                              onClick={(e) => { e.stopPropagation(); openAIPanel(doc); }}
+                            >
+                              <Sparkles className="h-3.5 w-3.5 text-primary" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 rounded-md"
+                              onClick={(e) => { e.stopPropagation(); openDecreeDialog(doc); }}
+                            >
+                              <Building2 className="h-3.5 w-3.5 text-orange-500" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-md">
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => openAIPanel(doc)}>
+                                  <Sparkles className="h-3.5 w-3.5 mr-2 text-primary" />
+                                  Ver resumen IA
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => openDecreeDialog(doc)}>
+                                  <Building2 className="h-3.5 w-3.5 mr-2 text-orange-500" />
+                                  Decretar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="py-2 text-xs">
+                                  <FolderOpen className="h-3.5 w-3.5 mr-2" />
+                                  Expediente
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs">
+                                  <UserPlus className="h-3.5 w-3.5 mr-2" />
+                                  Asignar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 animate-scale-in">
-                          <DropdownMenuItem className="py-2.5" onClick={() => openAIPanel(doc)}>
-                            <Sparkles className="h-4 w-4 mr-2 text-primary" />
-                            Ver resumen IA
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="py-2.5" onClick={() => openDecreeDialog(doc)}>
-                            <Building2 className="h-4 w-4 mr-2 text-orange-500" />
-                            Decretar documento
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="py-2.5">
-                            <FolderOpen className="h-4 w-4 mr-2" />
-                            Abrir expediente
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="py-2.5">
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Asignar responsable
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="py-2.5">
-                            <Clock className="h-4 w-4 mr-2" />
-                            Crear plazo
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="py-2.5">
-                            <PenTool className="h-4 w-4 mr-2" />
-                            Enviar a firma
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
