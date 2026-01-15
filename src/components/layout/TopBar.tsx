@@ -389,7 +389,7 @@ export function TopBar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setProfileOpen(true)} className="transition-colors">
+              <DropdownMenuItem onClick={() => handleProfileOpen(true)} className="transition-colors">
                 <User className="mr-2 h-4 w-4" />
                 {t('common.profile')}
               </DropdownMenuItem>
