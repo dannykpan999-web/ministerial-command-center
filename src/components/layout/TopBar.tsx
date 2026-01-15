@@ -52,6 +52,7 @@ import {
   PenTool,
   AlertTriangle,
   CheckCircle,
+  CheckCircle2,
   Moon,
   Sun,
   HelpCircle,
