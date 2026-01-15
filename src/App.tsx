@@ -2,10 +2,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import { MainLayout } from "@/components/layout/MainLayout";
 
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import InboxPage from "./pages/Inbox";
 import NewEntry from "./pages/NewEntry";
@@ -31,27 +35,41 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route element={<MainLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/inbox" element={<InboxPage />} />
-              <Route path="/inbox/new" element={<NewEntry />} />
-              <Route path="/outbox" element={<OutboxPage />} />
-              <Route path="/outbox/new" element={<NewEntry />} />
-              <Route path="/cases" element={<CasesPage />} />
-              <Route path="/cases/new" element={<CasesPage />} />
-              <Route path="/cases/:id" element={<CaseDetail />} />
-              <Route path="/deadlines" element={<DeadlinesPage />} />
-              <Route path="/assistant" element={<AIAssistant />} />
-              <Route path="/multimedia" element={<MultimediaPage />} />
-              <Route path="/signature" element={<SignaturePage />} />
-              <Route path="/archive" element={<ArchivePage />} />
-              <Route path="/content" element={<ContentPage />} />
-              <Route path="/audit" element={<AuditPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              {/* Protected routes */}
+              <Route element={
+                <AuthGuard>
+                  <MainLayout />
+                </AuthGuard>
+              }>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/inbox" element={<InboxPage />} />
+                <Route path="/inbox/new" element={<NewEntry />} />
+                <Route path="/outbox" element={<OutboxPage />} />
+                <Route path="/outbox/new" element={<NewEntry />} />
+                <Route path="/cases" element={<CasesPage />} />
+                <Route path="/cases/new" element={<CasesPage />} />
+                <Route path="/cases/:id" element={<CaseDetail />} />
+                <Route path="/deadlines" element={<DeadlinesPage />} />
+                <Route path="/assistant" element={<AIAssistant />} />
+                <Route path="/multimedia" element={<MultimediaPage />} />
+                <Route path="/signature" element={<SignaturePage />} />
+                <Route path="/archive" element={<ArchivePage />} />
+                <Route path="/content" element={<ContentPage />} />
+                <Route path="/audit" element={<AuditPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+
+              {/* 404 */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </LanguageProvider>

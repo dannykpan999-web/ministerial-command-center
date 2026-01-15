@@ -38,6 +38,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from '@/components/ui/sonner';
 import {
   Search,
   Bell,
@@ -154,6 +155,36 @@ export function TopBar() {
     LECTOR: 'Lector',
   };
 
+  // Format phone number for Equatorial Guinea (+240)
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digit characters
+    const cleaned = value.replace(/\D/g, '');
+
+    // If starts with 240, keep it; otherwise add +240 prefix
+    let formatted = '';
+    if (cleaned.startsWith('240')) {
+      // Format: +240 XXX XXX XXX
+      formatted = '+240';
+      if (cleaned.length > 3) formatted += ' ' + cleaned.slice(3, 6);
+      if (cleaned.length > 6) formatted += ' ' + cleaned.slice(6, 9);
+      if (cleaned.length > 9) formatted += ' ' + cleaned.slice(9, 12);
+    } else if (cleaned.length > 0) {
+      // Add +240 prefix
+      formatted = '+240';
+      if (cleaned.length > 0) formatted += ' ' + cleaned.slice(0, 3);
+      if (cleaned.length > 3) formatted += ' ' + cleaned.slice(3, 6);
+      if (cleaned.length > 6) formatted += ' ' + cleaned.slice(6, 9);
+    }
+
+    return formatted;
+  };
+
+  // Handle phone input change
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhone(formatted);
+  };
+
   // Initialize form fields when modal opens
   const handleProfileOpen = (open: boolean) => {
     if (open && user) {
@@ -182,9 +213,25 @@ export function TopBar() {
         phone: phone || undefined,
         position: position || undefined,
       });
+
+      toast.success('¡Perfil actualizado!', {
+        description: 'Tus cambios han sido guardados exitosamente',
+        duration: 3000,
+        icon: <CheckCircle2 className="h-5 w-5" />,
+        className: 'border-l-4 border-l-green-500',
+      });
+
       setProfileOpen(false);
     } catch (error: any) {
-      setUpdateError(error.message || 'Error al actualizar perfil');
+      const errorMessage = error.message || 'Error al actualizar perfil';
+      setUpdateError(errorMessage);
+
+      toast.error('Error al actualizar', {
+        description: errorMessage,
+        duration: 4000,
+        icon: <AlertTriangle className="h-5 w-5" />,
+        className: 'border-l-4 border-l-red-500',
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -533,12 +580,16 @@ export function TopBar() {
                     id="profile-phone"
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+240 XXX XXX XXX"
+                    onChange={handlePhoneChange}
+                    placeholder="+240 222 333 444"
                     className="pl-10"
                     disabled={isUpdating}
+                    maxLength={16}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Formato: +240 XXX XXX XXX
+                </p>
               </div>
 
               <div className="space-y-2">

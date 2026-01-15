@@ -1,0 +1,586 @@
+// Ministerial Command Center - Database Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. USER MANAGEMENT
+// ============================================
+
+enum Role {
+  ADMIN
+  GABINETE
+  REVISOR
+  LECTOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // bcrypt hashed
+  firstName     String
+  lastName      String
+  position      String?
+  phone         String?
+  whatsapp      String?
+  role          Role      @default(LECTOR)
+
+  // Relations
+  departmentId  String
+  department    Department @relation(fields: [departmentId], references: [id])
+
+  // Activity tracking
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations to other models
+  documentsCreated      Document[]           @relation("DocumentCreator")
+  documentsResponsible  Document[]           @relation("DocumentResponsible")
+  filesUploaded         DocumentFile[]
+  cloudConnections      CloudStorageConnection[]
+  signatureFlows        SignatureFlow[]      @relation("FlowCreator")
+  signatureParticipants SignatureParticipant[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  comments              Comment[]
+
+  @@index([departmentId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ============================================
+// 2. ORGANIZATIONAL STRUCTURE
+// ============================================
+
+model Department {
+  id          String       @id @default(cuid())
+  name        String
+  shortName   String?
+  level       Int          @default(1)
+  parentId    String?
+  parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DepartmentHierarchy")
+
+  order       Int          @default(0)
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  users       User[]
+
+  @@index([parentId])
+  @@index([level])
+  @@map("departments")
+}
+
+model Entity {
+  id              String      @id @default(cuid())
+  name            String
+  shortName       String?
+  type            EntityType
+  classification  Classification @default(EXTERNAL)
+
+  // Contact details
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+
+  // Metadata
+  description     String?
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  documents       Document[]
+
+  @@index([type])
+  @@index([classification])
+  @@map("entities")
+}
+
+enum EntityType {
+  INTERNAL_DEPARTMENT
+  PUBLIC_COMPANY
+  PRIVATE_COMPANY
+  GOVERNMENT_MINISTRY
+  INTERNATIONAL_ORG
+  CITIZEN
+  OTHER
+}
+
+// ============================================
+// 3. DOCUMENT MANAGEMENT
+// ============================================
+
+model Document {
+  id                  String      @id @default(cuid())
+  correlativeNumber   String      @unique  // ENT-2024-001542
+  title               String
+  type                String      // Oficio, Memorando, Circular, etc.
+  status              DocStatus   @default(PENDING)
+  direction           Direction   // in, out
+  classification      Classification // internal, external
+
+  // Routing & assignment
+  channel             String?     // physical, email, etc.
+  origin              String?
+  entityId            String
+  entity              Entity      @relation(fields: [entityId], references: [id])
+
+  createdById         String
+  createdBy           User        @relation("DocumentCreator", fields: [createdById], references: [id])
+
+  responsibleId       String
+  responsible         User        @relation("DocumentResponsible", fields: [responsibleId], references: [id])
+
+  // Expediente
+  expedienteId        String?
+  expediente          Expediente? @relation(fields: [expedienteId], references: [id])
+
+  // Content
+  content             String?     @db.Text
+  priority            Priority?
+  decretedTo          String[]    // Department IDs
+
+  // AI-generated fields
+  aiSummary           String?     @db.Text
+  aiProposedResponse  String?     @db.Text
+  aiKeyPoints         String[]
+
+  // Timestamps
+  receivedAt          DateTime?
+  sentAt              DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  // Relations
+  files               DocumentFile[]
+  tags                DocumentTag[]
+  comments            Comment[]
+  deadlines           Deadline[]
+  signatureFlows      SignatureFlow[]
+
+  @@index([correlativeNumber])
+  @@index([status])
+  @@index([direction])
+  @@index([classification])
+  @@index([entityId])
+  @@index([responsibleId])
+  @@index([expedienteId])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+enum DocStatus {
+  DRAFT
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+  REJECTED
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+enum Classification {
+  INTERNAL
+  EXTERNAL
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ============================================
+// 4. FILE STORAGE
+// ============================================
+
+model DocumentFile {
+  id            String      @id @default(cuid())
+  documentId    String
+  document      Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  fileName      String
+  fileSize      Int         // bytes
+  mimeType      String
+
+  storageType   StorageType // S3, AZURE, ONEDRIVE, GDRIVE
+  storagePath   String      // S3 key or cloud file ID
+  storageUrl    String?     // Presigned URL or direct URL
+  thumbnailUrl  String?
+
+  version       Int         @default(1)
+  hash          String?     // SHA-256 for integrity
+
+  uploadedById  String
+  uploadedBy    User        @relation(fields: [uploadedById], references: [id])
+
+  createdAt     DateTime    @default(now())
+
+  @@index([documentId])
+  @@index([uploadedById])
+  @@map("document_files")
+}
+
+enum StorageType {
+  S3
+  AZURE
+  ONEDRIVE
+  GDRIVE
+  DROPBOX
+  LOCAL
+}
+
+// ============================================
+// 5. CLOUD STORAGE INTEGRATION
+// ============================================
+
+model CloudStorageConnection {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider      CloudProvider // ONEDRIVE, GDRIVE, DROPBOX
+  accessToken   String        @db.Text
+  refreshToken  String        @db.Text
+  expiresAt     DateTime
+
+  email         String
+  displayName   String?
+
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("cloud_storage_connections")
+}
+
+enum CloudProvider {
+  ONEDRIVE
+  GDRIVE
+  DROPBOX
+}
+
+// ============================================
+// 6. EXPEDIENTES (CASE FILES)
+// ============================================
+
+model Expediente {
+  id              String      @id @default(cuid())
+  code            String      @unique // EXP-2024-001
+  title           String
+  description     String?     @db.Text
+  status          ExpStatus   @default(OPEN)
+
+  startDate       DateTime    @default(now())
+  closedDate      DateTime?
+
+  // Relations
+  documents       Document[]
+  deadlines       Deadline[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([code])
+  @@index([status])
+  @@map("expedientes")
+}
+
+enum ExpStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  ARCHIVED
+}
+
+// ============================================
+// 7. DEADLINES & TASKS
+// ============================================
+
+model Deadline {
+  id              String      @id @default(cuid())
+  title           String
+  description     String?     @db.Text
+  dueDate         DateTime
+  status          DeadlineStatus @default(PENDING)
+  priority        Priority    @default(MEDIUM)
+
+  // Relations
+  documentId      String?
+  document        Document?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  expedienteId    String?
+  expediente      Expediente? @relation(fields: [expedienteId], references: [id], onDelete: SetNull)
+
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([dueDate])
+  @@index([status])
+  @@index([documentId])
+  @@map("deadlines")
+}
+
+enum DeadlineStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+// ============================================
+// 8. ELECTRONIC SIGNATURE
+// ============================================
+
+model SignatureFlow {
+  id              String      @id @default(cuid())
+  documentId      String
+  document        Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?     @db.Text
+  status          SignatureStatus @default(PENDING)
+
+  createdById     String
+  createdBy       User        @relation("FlowCreator", fields: [createdById], references: [id])
+
+  signedPdfPath   String?     // S3 path to signed PDF
+
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  participants    SignatureParticipant[]
+
+  @@index([documentId])
+  @@index([status])
+  @@map("signature_flows")
+}
+
+enum SignatureStatus {
+  PENDING
+  IN_PROGRESS
+  SIGNED
+  REJECTED
+  CANCELLED
+}
+
+model SignatureParticipant {
+  id              String      @id @default(cuid())
+  flowId          String
+  flow            SignatureFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+
+  order           Int         @default(1)
+  role            SignerRole  @default(SIGNER)
+  status          ParticipantStatus @default(PENDING)
+
+  signedAt        DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?     @db.Text
+
+  signatureData   String?     @db.Text // Digital signature data
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([flowId])
+  @@index([userId])
+  @@index([status])
+  @@map("signature_participants")
+}
+
+enum SignerRole {
+  SIGNER
+  APPROVER
+  REVIEWER
+  OBSERVER
+}
+
+enum ParticipantStatus {
+  PENDING
+  SIGNED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================
+// 9. TAGS & CATEGORIZATION
+// ============================================
+
+model Tag {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  color       String?
+  description String?
+
+  // Relations
+  documents   DocumentTag[]
+
+  createdAt   DateTime      @default(now())
+
+  @@map("tags")
+}
+
+model DocumentTag {
+  documentId  String
+  document    Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  tagId       String
+  tag         Tag           @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime      @default(now())
+
+  @@id([documentId, tagId])
+  @@map("document_tags")
+}
+
+// ============================================
+// 10. COMMENTS & ANNOTATIONS
+// ============================================
+
+model Comment {
+  id          String    @id @default(cuid())
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  content     String    @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([documentId])
+  @@index([userId])
+  @@map("comments")
+}
+
+// ============================================
+// 11. NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        NotificationType
+  title       String
+  message     String          @db.Text
+
+  relatedId   String?         // Document ID, Deadline ID, etc.
+  relatedType String?         // "document", "deadline", etc.
+
+  isRead      Boolean         @default(false)
+  readAt      DateTime?
+
+  createdAt   DateTime        @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  DOCUMENT_DECREED
+  DOCUMENT_ASSIGNED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  SIGNATURE_REQUIRED
+  SIGNATURE_COMPLETED
+  DEADLINE_REMINDER
+  DEADLINE_OVERDUE
+  SYSTEM
+}
+
+// ============================================
+// 12. AUDIT LOGGING
+// ============================================
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action        String    // LOGIN, LOGOUT, CREATE_DOCUMENT, UPDATE_DOCUMENT, etc.
+  resourceType  String?   // "document", "user", "file", etc.
+  resourceId    String?
+
+  changes       Json?     // { before: {}, after: {} }
+
+  ipAddress     String?
+  userAgent     String?
+
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// 13. DOCUMENT TEMPLATES
+// ============================================
+
+model Template {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    // oficio, memorando, circular, etc.
+  content     String    @db.Text
+
+  variables   String[]  // ["{fecha}", "{destinatario}", etc.]
+
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type])
+  @@map("templates")
+}
+
+// ============================================
+// 14. SYSTEM SETTINGS
+// ============================================
+
+model Setting {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       String    @db.Text
+  description String?
+
+  updatedAt   DateTime  @updatedAt
+
+  @@map("settings")
+}

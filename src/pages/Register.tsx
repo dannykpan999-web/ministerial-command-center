@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from '@/components/ui/sonner';
 import {
   Select,
   SelectContent,
@@ -90,6 +91,13 @@ export default function Register() {
 
       setSuccess(true);
 
+      toast.success('¡Registro exitoso!', {
+        description: 'Tu cuenta ha sido creada. Redirigiendo al dashboard...',
+        duration: 3000,
+        icon: <UserPlus className="h-5 w-5" />,
+        className: 'border-l-4 border-l-green-500',
+      });
+
       // Auto login after successful registration
       setTimeout(async () => {
         await login(data.email, data.password, false);
@@ -97,7 +105,14 @@ export default function Register() {
       }, 1500);
 
     } catch (err: any) {
-      setError(err.message || 'Error al registrar. Por favor, intente nuevamente.');
+      const errorMessage = err.message || 'Error al registrar. Por favor, intente nuevamente.';
+      setError(errorMessage);
+      toast.error('Error en el registro', {
+        description: errorMessage,
+        duration: 4000,
+        icon: <AlertCircle className="h-5 w-5" />,
+        className: 'border-l-4 border-l-red-500',
+      });
     }
   };
 
