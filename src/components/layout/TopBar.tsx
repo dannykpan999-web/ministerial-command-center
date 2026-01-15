@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { locales, Locale } from '@/lib/i18n';
-import { currentUser } from '@/lib/mockData';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,6 +37,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Search,
   Bell,
@@ -54,7 +55,10 @@ import {
   Sun,
   HelpCircle,
   Mail,
-  Shield
+  Shield,
+  Loader2,
+  Phone,
+  Briefcase
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, subHours, subDays } from 'date-fns';
@@ -119,23 +123,71 @@ const mockNotifications: Notification[] = [
 
 export function TopBar() {
   const { t, locale, setLocale } = useLanguage();
+  const { user, logout, updateProfile } = useAuth();
   const [commandOpen, setCommandOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [position, setPosition] = useState('');
   const navigate = useNavigate();
 
-  const initials = currentUser.name
+  const userName = user ? `${user.firstName} ${user.lastName}` : 'Usuario';
+  const userEmail = user?.email || '';
+  const userRole = user?.role || 'LECTOR';
+
+  const initials = userName
     .split(' ')
     .map(n => n[0])
     .slice(0, 2)
     .join('');
 
   const roleLabels: Record<string, string> = {
-    admin: 'Administrador',
-    gabinete: 'Gabinete',
-    revisor: 'Revisor',
-    lector: 'Lector',
+    ADMIN: 'Administrador',
+    GABINETE: 'Gabinete',
+    REVISOR: 'Revisor',
+    LECTOR: 'Lector',
+  };
+
+  // Initialize form fields when modal opens
+  const handleProfileOpen = (open: boolean) => {
+    if (open && user) {
+      setFirstName(user.firstName);
+      setLastName(user.lastName);
+      setEmail(user.email);
+      setPhone(user.phone || '');
+      setPosition(user.position || '');
+      setUpdateError(null);
+    }
+    setProfileOpen(open);
+  };
+
+  // Handle profile update
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setIsUpdating(true);
+    setUpdateError(null);
+
+    try {
+      await updateProfile(user.id, {
+        firstName,
+        lastName,
+        email,
+        phone: phone || undefined,
+        position: position || undefined,
+      });
+      setProfileOpen(false);
+    } catch (error: any) {
+      setUpdateError(error.message || 'Error al actualizar perfil');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -323,16 +375,16 @@ export function TopBar() {
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden md:inline text-sm font-medium">{currentUser.name.split(' ')[0]}</span>
+                <span className="hidden md:inline text-sm font-medium">{userName.split(' ')[0]}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 animate-scale-in">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">{currentUser.name}</p>
-                  <p className="text-xs text-muted-foreground">{currentUser.email}</p>
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs text-muted-foreground">{userEmail}</p>
                   <Badge variant="secondary" className="w-fit mt-1 text-xs">
-                    {roleLabels[currentUser.role]}
+                    {roleLabels[userRole]}
                   </Badge>
                 </div>
               </DropdownMenuLabel>
@@ -355,7 +407,10 @@ export function TopBar() {
                 Ayuda
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive transition-colors">
+              <DropdownMenuItem
+                className="text-destructive transition-colors"
+                onClick={() => logout()}
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 {t('common.logout')}
               </DropdownMenuItem>
@@ -393,12 +448,20 @@ export function TopBar() {
       </CommandDialog>
 
       {/* Profile Dialog */}
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+      <Dialog open={profileOpen} onOpenChange={handleProfileOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Mi Perfil</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 mt-4">
+            {/* Error alert */}
+            {updateError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{updateError}</AlertDescription>
+              </Alert>
+            )}
+
             {/* Avatar section */}
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
@@ -407,11 +470,11 @@ export function TopBar() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="font-semibold">{currentUser.name}</h3>
-                <p className="text-sm text-muted-foreground">{currentUser.email}</p>
+                <h3 className="font-semibold">{userName}</h3>
+                <p className="text-sm text-muted-foreground">{userEmail}</p>
                 <Badge variant="secondary" className="mt-1 text-xs">
                   <Shield className="h-3 w-3 mr-1" />
-                  {roleLabels[currentUser.role]}
+                  {roleLabels[userRole]}
                 </Badge>
               </div>
             </div>
@@ -420,18 +483,85 @@ export function TopBar() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="profile-name">Nombre completo</Label>
-                  <Input id="profile-name" defaultValue={currentUser.name} />
+                  <Label htmlFor="profile-firstName">Nombre</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="profile-firstName"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="pl-10"
+                      disabled={isUpdating}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="profile-email">Correo electrónico</Label>
-                  <Input id="profile-email" defaultValue={currentUser.email} type="email" />
+                  <Label htmlFor="profile-lastName">Apellido</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="profile-lastName"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="pl-10"
+                      disabled={isUpdating}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profile-email">Correo electrónico</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="profile-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    disabled={isUpdating}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profile-phone">Teléfono (opcional)</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="profile-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+240 XXX XXX XXX"
+                    className="pl-10"
+                    disabled={isUpdating}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profile-position">Cargo (opcional)</Label>
+                <div className="relative">
+                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="profile-position"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    placeholder="Director de Tecnología"
+                    className="pl-10"
+                    disabled={isUpdating}
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Rol</Label>
-                <Input value={roleLabels[currentUser.role]} disabled />
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input value={roleLabels[userRole]} disabled className="pl-10" />
+                </div>
               </div>
 
               <Card>
@@ -456,11 +586,22 @@ export function TopBar() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setProfileOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => handleProfileOpen(false)}
+                disabled={isUpdating}
+              >
                 Cancelar
               </Button>
-              <Button onClick={() => setProfileOpen(false)}>
-                Guardar cambios
+              <Button onClick={handleSaveProfile} disabled={isUpdating}>
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar cambios'
+                )}
               </Button>
             </div>
           </div>
