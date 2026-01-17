@@ -25,16 +25,17 @@ import {
   fetchDeadlines,
   getEntityById,
   getUserById,
-  currentUser,
   Document,
   Deadline,
 } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [urgentDeadlines, setUrgentDeadlines] = useState<Deadline[]>([]);
@@ -66,7 +67,7 @@ export default function Dashboard() {
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in safe-area-inset">
       <PageHeader
-        title={`${t('dashboard.welcome')}, ${currentUser.name.split(' ')[0]}`}
+        title={`${t('dashboard.welcome')}, ${user?.firstName || 'Usuario'}`}
         description={format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
       />
 
