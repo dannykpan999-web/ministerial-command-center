@@ -38,6 +38,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus,
@@ -56,13 +66,18 @@ import {
   Landmark,
   Factory,
   Briefcase,
+  Edit,
+  Trash2,
 } from 'lucide-react';
 import { entities, entityTypeLabels } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
-import { useInboxDocuments } from '@/hooks/useDocuments';
+import { EditDocumentDialog } from '@/components/documents/EditDocumentDialog';
+import { useInboxDocuments, useArchiveDocument } from '@/hooks/useDocuments';
 import { useDebounce } from '@/hooks/useDebounce';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 
 export default function InboxPage() {
   const { t } = useLanguage();
@@ -76,18 +91,27 @@ export default function InboxPage() {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [decreeDialogOpen, setDecreeDialogOpen] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   // Debounce search to avoid too many API calls
   const debouncedSearch = useDebounce(search, 500);
 
   // Build query parameters
   const queryParams = useMemo(() => ({
-    page: 1,
-    limit: 100,
+    page: currentPage,
+    limit: pageSize,
     search: debouncedSearch || undefined,
     entityId: entityFilter !== 'all' ? entityFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     classification: classificationFilter !== 'all' ? classificationFilter : undefined,
-  }), [debouncedSearch, entityFilter, statusFilter, classificationFilter]);
+  }), [currentPage, pageSize, debouncedSearch, entityFilter, statusFilter, classificationFilter]);
+
+  // Reset to first page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, entityFilter, statusFilter, classificationFilter]);
 
   // Fetch inbox documents with real API
   const { data: inboxData, isLoading: loading } = useInboxDocuments(queryParams);
@@ -532,6 +556,20 @@ export default function InboxPage() {
         </>
       )}
 
+      {/* Pagination */}
+      {!loading && filteredDocs.length > 0 && inboxData?.meta && (
+        <div className="mt-6">
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={inboxData.meta.totalPages || 1}
+            pageSize={pageSize}
+            totalItems={inboxData.meta.total || filteredDocs.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
+        </div>
+      )}
+
       {/* AI Panel Sheet */}
       <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -567,6 +605,9 @@ export default function InboxPage() {
           }}
         />
       )}
+
+      {/* Scroll to Top Button */}
+      <ScrollToTop />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import {
   ChevronRight,
   ChevronDown,
@@ -464,6 +465,9 @@ export default function DepartmentsPage() {
           )}
         </div>
       </div>
+
+      {/* Scroll to Top Button */}
+      <ScrollToTop />
     </div>
   );
 }

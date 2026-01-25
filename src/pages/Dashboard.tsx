@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardStats, useInboxDocuments } from '@/hooks/useDocuments';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { useEffect, useState } from 'react';
 
 export default function Dashboard() {
@@ -273,6 +274,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Scroll to Top Button */}
+      <ScrollToTop />
     </div>
   );
 }

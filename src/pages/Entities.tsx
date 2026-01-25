@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   entitiesApi,
@@ -51,10 +51,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, MoreVertical, Edit, Trash2, Search, Building2, ExternalLink } from 'lucide-react';
+import { Plus, MoreVertical, Edit, Trash2, Search, Building2, ExternalLink, Mail, Phone, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { CreateEntityDialog } from '@/components/entities/CreateEntityDialog';
 import { EditEntityDialog } from '@/components/entities/EditEntityDialog';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 
 export default function EntitiesPage() {
   const queryClient = useQueryClient();
@@ -65,6 +67,10 @@ export default function EntitiesPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Fetch entities
   const { data: entities = [], isLoading } = useQuery({
@@ -87,17 +93,33 @@ export default function EntitiesPage() {
   });
 
   // Filter entities
-  const filteredEntities = entities.filter((entity) => {
-    const matchesSearch =
-      entity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entity.shortName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entity.email?.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredEntities = useMemo(() => {
+    return entities.filter((entity) => {
+      const matchesSearch =
+        entity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entity.shortName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entity.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesType = typeFilter === 'ALL' || entity.type === typeFilter;
-    const matchesClassification = classificationFilter === 'ALL' || entity.classification === classificationFilter;
+      const matchesType = typeFilter === 'ALL' || entity.type === typeFilter;
+      const matchesClassification = classificationFilter === 'ALL' || entity.classification === classificationFilter;
 
-    return matchesSearch && matchesType && matchesClassification && entity.isActive;
-  });
+      return matchesSearch && matchesType && matchesClassification && entity.isActive;
+    });
+  }, [entities, searchQuery, typeFilter, classificationFilter]);
+
+  // Paginated entities
+  const paginatedEntities = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredEntities.slice(startIndex, endIndex);
+  }, [filteredEntities, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredEntities.length / pageSize);
+
+  // Reset to first page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter, classificationFilter]);
 
   // Calculate stats
   const stats = {
@@ -252,104 +274,222 @@ export default function EntitiesPage() {
             Lista de todas las entidades activas
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-10">Cargando entidades...</div>
-          ) : filteredEntities.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              No se encontraron entidades
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Siglas</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Clasificación</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEntities.map((entity) => (
-                  <TableRow key={entity.id}>
-                    <TableCell className="font-medium">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          {entity.name}
-                          {entity.website && (
-                            <a
-                              href={entity.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-700"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
+        <CardContent className="space-y-4">
+          {/* Desktop Table */}
+          <div className="hidden md:block border rounded-lg overflow-hidden">
+            {isLoading ? (
+              <div className="text-center py-10">Cargando entidades...</div>
+            ) : filteredEntities.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                No se encontraron entidades
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Siglas</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Clasificación</TableHead>
+                      <TableHead>Contacto</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedEntities.map((entity) => (
+                      <TableRow key={entity.id} className="hover:bg-muted/50 transition-colors">
+                        <TableCell className="font-medium">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {entity.name}
+                              {entity.website && (
+                                <a
+                                  href={entity.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:text-blue-700"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                            {entity.description && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {entity.description.substring(0, 60)}
+                                {entity.description.length > 60 && '...'}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {entity.shortName && (
+                            <Badge variant="outline">{entity.shortName}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getTypeBadgeColor(entity.type)}>
+                            {getEntityTypeLabel(entity.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={entity.classification === Classification.INTERNAL ? 'default' : 'secondary'}>
+                            {getClassificationLabel(entity.classification)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {entity.email && (
+                              <div className="text-muted-foreground">{entity.email}</div>
+                            )}
+                            {entity.phone && (
+                              <div className="text-muted-foreground text-xs">{entity.phone}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleEdit(entity)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(entity)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3">
+            {isLoading ? (
+              <div className="text-center py-10">Cargando entidades...</div>
+            ) : filteredEntities.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                No se encontraron entidades
+              </div>
+            ) : (
+              paginatedEntities.map((entity) => (
+                <Card key={entity.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Building2 className="h-6 w-6 text-primary" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm truncate">{entity.name}</p>
+                              {entity.website && (
+                                <a
+                                  href={entity.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                            {entity.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {entity.description}
+                              </p>
+                            )}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleEdit(entity)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(entity)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {/* Badges and Info */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {entity.shortName && (
+                            <Badge variant="outline" className="text-xs">{entity.shortName}</Badge>
+                          )}
+                          <Badge className={`${getTypeBadgeColor(entity.type)} text-xs`}>
+                            {getEntityTypeLabel(entity.type)}
+                          </Badge>
+                          <Badge variant={entity.classification === Classification.INTERNAL ? 'default' : 'secondary'} className="text-xs">
+                            {getClassificationLabel(entity.classification)}
+                          </Badge>
+                        </div>
+
+                        {/* Contact Info */}
+                        <div className="space-y-1">
+                          {entity.email && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Mail className="h-3 w-3" />
+                              <span className="truncate">{entity.email}</span>
+                            </div>
+                          )}
+                          {entity.phone && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {entity.phone}
+                            </div>
                           )}
                         </div>
-                        {entity.description && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {entity.description.substring(0, 60)}
-                            {entity.description.length > 60 && '...'}
-                          </div>
-                        )}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {entity.shortName && (
-                        <Badge variant="outline">{entity.shortName}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getTypeBadgeColor(entity.type)}>
-                        {getEntityTypeLabel(entity.type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={entity.classification === Classification.INTERNAL ? 'default' : 'secondary'}>
-                        {getClassificationLabel(entity.classification)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {entity.email && (
-                          <div className="text-muted-foreground">{entity.email}</div>
-                        )}
-                        {entity.phone && (
-                          <div className="text-muted-foreground text-xs">{entity.phone}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleEdit(entity)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(entity)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+
+          {/* Pagination */}
+          {filteredEntities.length > 0 && (
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalItems={filteredEntities.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>
@@ -391,6 +531,9 @@ export default function EntitiesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Scroll to Top Button */}
+      <ScrollToTop />
     </div>
   );
 }

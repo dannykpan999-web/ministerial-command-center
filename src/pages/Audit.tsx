@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { ScrollToTop } from '@/components/ui/scroll-to-top';
 
 const actionIcons: Record<string, any> = {
   document: FileText,
@@ -453,6 +454,9 @@ export default function AuditPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Scroll to Top Button */}
+      <ScrollToTop />
     </div>
   );
 }
