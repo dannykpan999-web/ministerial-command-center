@@ -1,10 +1,20 @@
 import { PrismaClient, Role, EntityType, Classification } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedGovernmentStructure } from './seeds/seed-government-structure';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seed...');
+  console.log('=' + '='.repeat(58));
+
+  // ============================================
+  // 0. SEED REAL GOVERNMENT STRUCTURE
+  // ============================================
+  console.log('\n📍 Step 1: Seeding Real Government Structure...\n');
+  await seedGovernmentStructure();
+  console.log('\n✅ Government structure seeded successfully!\n');
+  console.log('=' + '='.repeat(58) + '\n');
 
   // ============================================
   // 1. CREATE DEPARTMENT HIERARCHY
@@ -113,11 +123,12 @@ async function main() {
   console.log(`✅ Created ${10} departments`);
 
   // ============================================
-  // 2. CREATE ENTITIES
+  // 2. CREATE ADDITIONAL ENTITIES
   // ============================================
-  console.log('🏢 Creating entities...');
+  console.log('🏢 Creating additional entities (companies & organizations)...');
 
-  // Internal Departments (already created above, but add as entities)
+  // NOTE: Government ministries are now created by the government structure seed
+  // We only add companies and organizations here
   await prisma.entity.createMany({
     data: [
       // Public Companies
@@ -137,37 +148,6 @@ async function main() {
         name: 'GITGE - Empresa de Telecomunicaciones de Guinea Ecuatorial',
         shortName: 'GITGE',
         type: EntityType.PUBLIC_COMPANY,
-        classification: Classification.EXTERNAL,
-      },
-      // Government Ministries
-      {
-        name: 'Ministerio de Economía, Planificación e Inversiones Públicas',
-        shortName: 'MEPIP',
-        type: EntityType.GOVERNMENT_MINISTRY,
-        classification: Classification.EXTERNAL,
-      },
-      {
-        name: 'Ministerio de Hacienda, Presupuestos y Privatización',
-        shortName: 'MHPP',
-        type: EntityType.GOVERNMENT_MINISTRY,
-        classification: Classification.EXTERNAL,
-      },
-      {
-        name: 'Ministerio de Infraestructuras y Obras Públicas',
-        shortName: 'MIOP',
-        type: EntityType.GOVERNMENT_MINISTRY,
-        classification: Classification.EXTERNAL,
-      },
-      {
-        name: 'Ministerio de Educación y Ciencia',
-        shortName: 'MEC',
-        type: EntityType.GOVERNMENT_MINISTRY,
-        classification: Classification.EXTERNAL,
-      },
-      {
-        name: 'Presidencia del Gobierno',
-        shortName: 'Presidencia',
-        type: EntityType.GOVERNMENT_MINISTRY,
         classification: Classification.EXTERNAL,
       },
       // Private Companies
@@ -196,10 +176,28 @@ async function main() {
         type: EntityType.INTERNATIONAL_ORG,
         classification: Classification.EXTERNAL,
       },
+      {
+        name: 'Banco Mundial',
+        shortName: 'BM',
+        type: EntityType.INTERNATIONAL_ORG,
+        classification: Classification.EXTERNAL,
+      },
+      {
+        name: 'Fondo Monetario Internacional',
+        shortName: 'FMI',
+        type: EntityType.INTERNATIONAL_ORG,
+        classification: Classification.EXTERNAL,
+      },
+      {
+        name: 'Unión Africana',
+        shortName: 'UA',
+        type: EntityType.INTERNATIONAL_ORG,
+        classification: Classification.EXTERNAL,
+      },
     ],
   });
 
-  console.log(`✅ Created 12 entities`);
+  console.log(`✅ Created 10 additional entities (companies & international orgs)`);
 
   // ============================================
   // 3. CREATE USERS
@@ -399,20 +397,27 @@ Ministerio de Transportes, Telecomunicaciones y Sistemas de IA`,
   // ============================================
   // SUMMARY
   // ============================================
-  console.log('\n✅ Database seeded successfully!');
-  console.log('📊 Summary:');
-  console.log(`   - Departments: 10`);
-  console.log(`   - Entities: 12`);
-  console.log(`   - Users: 4`);
-  console.log(`   - Templates: 3`);
-  console.log(`   - Tags: 8`);
-  console.log(`   - Settings: 6`);
+  console.log('\n' + '='.repeat(60));
+  console.log('✅ DATABASE SEEDED SUCCESSFULLY!');
+  console.log('='.repeat(60));
+  console.log('\n📊 Summary:');
+  console.log('   🏛️  Government Ministries: 33 (from real government data)');
+  console.log('   📁  Departments: ~60+ (including ministry departments)');
+  console.log('   🏢  Additional Entities: 10 (companies & organizations)');
+  console.log('   👤  Users: 4 (test accounts)');
+  console.log('   📝  Templates: 3');
+  console.log('   🏷️   Tags: 8');
+  console.log('   ⚙️   Settings: 6');
   console.log('\n👤 Default Users Created:');
-  console.log(`   - Admin: admin@mttsia.gob.gq / Admin123!`);
-  console.log(`   - Gabinete: gabinete@mttsia.gob.gq / Gabinete123!`);
-  console.log(`   - Revisor: revisor@mttsia.gob.gq / Revisor123!`);
-  console.log(`   - Lector: lector@mttsia.gob.gq / Lector123!`);
-  console.log('\n🚀 System ready to use!');
+  console.log('   - Admin: admin@mttsia.gob.gq / Admin123!');
+  console.log('   - Gabinete: gabinete@mttsia.gob.gq / Gabinete123!');
+  console.log('   - Revisor: revisor@mttsia.gob.gq / Revisor123!');
+  console.log('   - Lector: lector@mttsia.gob.gq / Lector123!');
+  console.log('\n🇬🇶 Real Government Structure Loaded:');
+  console.log('   ✅ All 33 official ministries from Decreto 34/2024');
+  console.log('   ✅ All 24 secretaries of state from Decreto 86/2024');
+  console.log('   ✅ Complete government hierarchy');
+  console.log('\n🚀 System ready to use with REAL government data!');
 }
 
 main()

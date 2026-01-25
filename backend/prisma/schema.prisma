@@ -119,6 +119,7 @@ enum EntityType {
   PRIVATE_COMPANY
   GOVERNMENT_MINISTRY
   INTERNATIONAL_ORG
+  EMBASSY
   CITIZEN
   OTHER
 }
@@ -161,6 +162,10 @@ model Document {
   aiSummary           String?     @db.Text
   aiProposedResponse  String?     @db.Text
   aiKeyPoints         String[]
+
+  // Additional fields
+  isDraft             Boolean     @default(false)
+  qrCode              String?
 
   // Timestamps
   receivedAt          DateTime?

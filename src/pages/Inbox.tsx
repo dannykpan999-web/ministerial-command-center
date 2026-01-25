@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
@@ -57,58 +57,50 @@ import {
   Factory,
   Briefcase,
 } from 'lucide-react';
-import {
-  fetchDocuments,
-  entities,
-  getEntityById,
-  getUserById,
-  getDepartmentById,
-  Document,
-  entityTypeLabels,
-  Entity,
-} from '@/lib/mockData';
+import { entities, entityTypeLabels } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
+import { useInboxDocuments } from '@/hooks/useDocuments';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function InboxPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [classificationFilter, setClassificationFilter] = useState<string>('all');
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [decreeDialogOpen, setDecreeDialogOpen] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      const docs = await fetchDocuments('in');
-      setDocuments(docs);
-      setLoading(false);
-    }
-    loadData();
-  }, []);
+  // Debounce search to avoid too many API calls
+  const debouncedSearch = useDebounce(search, 500);
 
-  const filteredDocs = documents.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(search.toLowerCase()) ||
-                         doc.correlativeNumber.toLowerCase().includes(search.toLowerCase());
-    const matchesEntity = entityFilter === 'all' || doc.entityId === entityFilter;
-    const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-    const matchesClassification = classificationFilter === 'all' || doc.classification === classificationFilter;
-    return matchesSearch && matchesEntity && matchesStatus && matchesClassification;
-  });
+  // Build query parameters
+  const queryParams = useMemo(() => ({
+    page: 1,
+    limit: 100,
+    search: debouncedSearch || undefined,
+    entityId: entityFilter !== 'all' ? entityFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    classification: classificationFilter !== 'all' ? classificationFilter : undefined,
+  }), [debouncedSearch, entityFilter, statusFilter, classificationFilter]);
 
-  const openAIPanel = (doc: Document) => {
+  // Fetch inbox documents with real API
+  const { data: inboxData, isLoading: loading } = useInboxDocuments(queryParams);
+
+  const documents = inboxData?.data || [];
+  const filteredDocs = documents; // Already filtered by API
+
+  const openAIPanel = (doc: any) => {
     setSelectedDocument(doc);
     setAiPanelOpen(true);
   };
 
-  const openDecreeDialog = (doc: Document) => {
+  const openDecreeDialog = (doc: any) => {
     setSelectedDocument(doc);
     setDecreeDialogOpen(true);
   };
@@ -123,22 +115,26 @@ export default function InboxPage() {
     if (selectedIds.length === filteredDocs.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredDocs.map(d => d.id));
+      setSelectedIds(filteredDocs.map((d: any) => d.id));
     }
   };
 
   const statusLabels: Record<string, string> = {
-    pending: 'Pendiente',
-    in_progress: 'En proceso',
-    completed: 'Completado',
-    archived: 'Archivado',
+    DRAFT: 'Borrador',
+    PENDING: 'Pendiente',
+    IN_PROGRESS: 'En proceso',
+    COMPLETED: 'Completado',
+    ARCHIVED: 'Archivado',
+    REJECTED: 'Rechazado',
   };
 
-  const statusVariants: Record<string, 'warning' | 'info' | 'success' | 'muted'> = {
-    pending: 'warning',
-    in_progress: 'info',
-    completed: 'success',
-    archived: 'muted',
+  const statusVariants: Record<string, 'warning' | 'info' | 'success' | 'muted' | 'destructive'> = {
+    DRAFT: 'muted',
+    PENDING: 'warning',
+    IN_PROGRESS: 'info',
+    COMPLETED: 'success',
+    ARCHIVED: 'muted',
+    REJECTED: 'destructive',
   };
 
   return (
@@ -167,18 +163,18 @@ export default function InboxPage() {
           <span className="hidden sm:inline">Todos</span>
         </Button>
         <Button
-          variant={classificationFilter === 'internal' ? 'default' : 'outline'}
+          variant={classificationFilter === 'INTERNAL' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setClassificationFilter('internal')}
+          onClick={() => setClassificationFilter('INTERNAL')}
           className="rounded-full shrink-0 h-9"
         >
           <Home className="h-4 w-4 sm:mr-1.5" />
           <span className="hidden sm:inline">Internos</span>
         </Button>
         <Button
-          variant={classificationFilter === 'external' ? 'default' : 'outline'}
+          variant={classificationFilter === 'EXTERNAL' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setClassificationFilter('external')}
+          onClick={() => setClassificationFilter('EXTERNAL')}
           className="rounded-full shrink-0 h-9"
         >
           <ExternalLink className="h-4 w-4 sm:mr-1.5" />
@@ -241,9 +237,11 @@ export default function InboxPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
-              <SelectItem value="pending">{t('inbox.pending')}</SelectItem>
-              <SelectItem value="in_progress">{t('inbox.in_progress')}</SelectItem>
-              <SelectItem value="completed">{t('inbox.completed')}</SelectItem>
+              <SelectItem value="DRAFT">Borrador</SelectItem>
+              <SelectItem value="PENDING">Pendiente</SelectItem>
+              <SelectItem value="IN_PROGRESS">En proceso</SelectItem>
+              <SelectItem value="COMPLETED">Completado</SelectItem>
+              <SelectItem value="ARCHIVED">Archivado</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -304,9 +302,9 @@ export default function InboxPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDocs.map((doc, index) => {
-                  const entity = getEntityById(doc.entityId);
-                  const responsible = getUserById(doc.responsibleId);
+                {filteredDocs.map((doc: any, index: number) => {
+                  const entity = doc.entity; // Backend returns entity directly
+                  const responsible = doc.responsible; // Backend returns responsible user directly
                   return (
                     <TableRow
                       key={doc.id}
@@ -329,27 +327,27 @@ export default function InboxPage() {
                         <div className="flex items-center gap-2">
                           <div
                             className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
-                            style={{ backgroundColor: entity?.color }}
+                            style={{ backgroundColor: entity?.color || '#6366f1' }}
                           >
-                            {entity?.code}
+                            {entity?.shortName || entity?.name?.substring(0, 2)?.toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <span className="text-sm block truncate">{entity?.name}</span>
                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              {entity?.type === 'internal' && <><Home className="h-2.5 w-2.5" />Interno</>}
-                              {entity?.type === 'public' && <><Landmark className="h-2.5 w-2.5" />Empresa Pública</>}
-                              {entity?.type === 'private' && <><Briefcase className="h-2.5 w-2.5" />Privada</>}
-                              {entity?.type === 'government' && <><Building2 className="h-2.5 w-2.5" />Gobierno</>}
+                              {entity?.type === 'INTERNAL_DEPARTMENT' && <><Home className="h-2.5 w-2.5" />Interno</>}
+                              {entity?.type === 'PUBLIC_COMPANY' && <><Landmark className="h-2.5 w-2.5" />Empresa Pública</>}
+                              {entity?.type === 'PRIVATE_COMPANY' && <><Briefcase className="h-2.5 w-2.5" />Privada</>}
+                              {entity?.type === 'GOVERNMENT_MINISTRY' && <><Building2 className="h-2.5 w-2.5" />Gobierno</>}
                             </span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{responsible?.name}</span>
+                        <span className="text-sm">{responsible?.firstName} {responsible?.lastName}</span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          {format(doc.createdAt, 'dd MMM yyyy', { locale: es })}
+                          {format(new Date(doc.createdAt), 'dd MMM yyyy', { locale: es })}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -402,8 +400,8 @@ export default function InboxPage() {
 
           {/* Mobile Card List - Compact iPhone-optimized design */}
           <div className="md:hidden space-y-2">
-            {filteredDocs.map((doc, index) => {
-              const entity = getEntityById(doc.entityId);
+            {filteredDocs.map((doc: any, index: number) => {
+              const entity = doc.entity; // Backend returns entity directly
               const isSelected = selectedIds.includes(doc.id);
               return (
                 <div
@@ -419,9 +417,9 @@ export default function InboxPage() {
                   {/* Status accent bar */}
                   <div
                     className={`absolute top-0 left-0 right-0 h-0.5 ${
-                      doc.status === 'pending' ? 'bg-warning' :
-                      doc.status === 'in_progress' ? 'bg-info' :
-                      doc.status === 'completed' ? 'bg-success' : 'bg-muted'
+                      doc.status === 'PENDING' ? 'bg-warning' :
+                      doc.status === 'IN_PROGRESS' ? 'bg-info' :
+                      doc.status === 'COMPLETED' ? 'bg-success' : 'bg-muted'
                     }`}
                   />
 
@@ -449,13 +447,13 @@ export default function InboxPage() {
                         <div className="mt-2 flex items-center gap-2">
                           <div
                             className="h-6 w-6 rounded-md text-[9px] font-bold flex items-center justify-center text-white shrink-0"
-                            style={{ backgroundColor: entity?.color }}
+                            style={{ backgroundColor: entity?.color || '#6366f1' }}
                           >
-                            {entity?.code?.slice(0, 3)}
+                            {entity?.shortName?.slice(0, 3) || entity?.name?.substring(0, 3)?.toUpperCase()}
                           </div>
                           <span className="text-xs text-muted-foreground truncate flex-1">{entity?.name}</span>
                           <span className="text-[10px] text-muted-foreground shrink-0">
-                            {format(doc.createdAt, 'dd/MM', { locale: es })}
+                            {format(new Date(doc.createdAt), 'dd/MM', { locale: es })}
                           </span>
                         </div>
 

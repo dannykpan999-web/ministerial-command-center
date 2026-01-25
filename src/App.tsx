@@ -23,6 +23,9 @@ import SignaturePage from "./pages/Signature";
 import ArchivePage from "./pages/Archive";
 import ContentPage from "./pages/Content";
 import AuditPage from "./pages/Audit";
+import EntitiesPage from "./pages/Entities";
+import DepartmentsPage from "./pages/Departments";
+import UsersPage from "./pages/Users";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -63,6 +66,9 @@ const App = () => (
                 <Route path="/archive" element={<ArchivePage />} />
                 <Route path="/content" element={<ContentPage />} />
                 <Route path="/audit" element={<AuditPage />} />
+                <Route path="/entities" element={<EntitiesPage />} />
+                <Route path="/departments" element={<DepartmentsPage />} />
+                <Route path="/users" element={<UsersPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
 

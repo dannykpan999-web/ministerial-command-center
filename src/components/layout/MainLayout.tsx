@@ -2,10 +2,17 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useEffect, useState } from 'react';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 export function MainLayout() {
   const location = useLocation();
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Initialize WebSocket connection for real-time notifications
+  const { isConnected } = useWebSocket({
+    autoConnect: true,
+    showToastNotifications: true,
+  });
 
   // Page transition effect
   useEffect(() => {

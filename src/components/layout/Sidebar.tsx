@@ -13,6 +13,9 @@ import {
   Archive,
   FileText,
   ClipboardList,
+  Building2,
+  Network,
+  Users,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +40,9 @@ const navItems = [
   { key: 'nav.archivo', path: '/archive', icon: Archive, color: 'bg-slate-500' },
   { key: 'nav.contenidos', path: '/content', icon: FileText, color: 'bg-teal-500' },
   { key: 'nav.auditoria', path: '/audit', icon: ClipboardList, color: 'bg-indigo-500' },
+  { key: 'nav.entidades', path: '/entities', icon: Building2, color: 'bg-emerald-500' },
+  { key: 'nav.departamentos', path: '/departments', icon: Network, color: 'bg-sky-500' },
+  { key: 'nav.usuarios', path: '/users', icon: Users, color: 'bg-violet-500' },
   { key: 'nav.ajustes', path: '/settings', icon: Settings, color: 'bg-gray-500' },
 ];
 

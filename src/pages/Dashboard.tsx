@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
@@ -19,41 +18,39 @@ import {
   AlertTriangle,
   FileText,
 } from 'lucide-react';
-import {
-  fetchDashboardStats,
-  fetchDocuments,
-  fetchDeadlines,
-  getEntityById,
-  getUserById,
-  Document,
-  Deadline,
-} from '@/lib/mockData';
+import { fetchDeadlines, Deadline, getUserById } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDashboardStats, useInboxDocuments } from '@/hooks/useDocuments';
+import { useEffect, useState } from 'react';
 
 export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [stats, setStats] = useState<any>(null);
-  const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [urgentDeadlines, setUrgentDeadlines] = useState<Deadline[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Fetch dashboard stats with real API
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+
+  // Fetch recent inbox documents with real API
+  const { data: inboxData, isLoading: docsLoading } = useInboxDocuments({
+    page: 1,
+    limit: 5,
+    sort: 'createdAt:desc',
+  });
+
+  const loading = statsLoading || docsLoading;
+  const recentDocs = inboxData?.data || [];
 
   useEffect(() => {
-    async function loadData() {
-      const [statsData, docs, deadlines] = await Promise.all([
-        fetchDashboardStats(),
-        fetchDocuments('in'),
-        fetchDeadlines(),
-      ]);
-      setStats(statsData);
-      setRecentDocs(docs.slice(0, 5));
+    // Still using mock data for deadlines (will be implemented in future weeks)
+    async function loadDeadlines() {
+      const deadlines = await fetchDeadlines();
       setUrgentDeadlines(deadlines.filter(d => d.status === 'urgent' || d.status === 'overdue').slice(0, 4));
-      setLoading(false);
     }
-    loadData();
+    loadDeadlines();
   }, []);
 
   const quickActions = [
@@ -161,8 +158,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-3 sm:space-y-4 stagger-children">
-                {recentDocs.map((doc) => {
-                  const entity = getEntityById(doc.entityId);
+                {recentDocs.map((doc: any) => {
+                  const entity = doc.entity; // Backend returns entity directly
                   return (
                     <div
                       key={doc.id}
@@ -171,33 +168,35 @@ export default function Dashboard() {
                     >
                       <div
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] sm:text-xs font-semibold text-primary-foreground"
-                        style={{ backgroundColor: entity?.color }}
+                        style={{ backgroundColor: entity?.color || '#6366f1' }}
                       >
-                        {entity?.code}
+                        {entity?.shortName || entity?.name?.substring(0, 2)?.toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs sm:text-sm font-medium truncate">{doc.title}</p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
-                          {doc.correlativeNumber} · {format(doc.createdAt, 'dd MMM', { locale: es })}
+                          {doc.correlativeNumber} · {format(new Date(doc.createdAt), 'dd MMM', { locale: es })}
                         </p>
                       </div>
                       <StatusBadge
                         variant={
-                          doc.status === 'pending' ? 'warning' :
-                          doc.status === 'in_progress' ? 'info' :
-                          doc.status === 'completed' ? 'success' : 'muted'
+                          doc.status === 'PENDING' ? 'warning' :
+                          doc.status === 'IN_PROGRESS' ? 'info' :
+                          doc.status === 'COMPLETED' ? 'success' : 'muted'
                         }
                         className="text-[10px] sm:text-xs shrink-0"
                       >
                         <span className="hidden sm:inline">
-                          {doc.status === 'pending' ? 'Pendiente' :
-                           doc.status === 'in_progress' ? 'En proceso' :
-                           doc.status === 'completed' ? 'Completado' : 'Archivado'}
+                          {doc.status === 'PENDING' ? 'Pendiente' :
+                           doc.status === 'IN_PROGRESS' ? 'En proceso' :
+                           doc.status === 'COMPLETED' ? 'Completado' :
+                           doc.status === 'DRAFT' ? 'Borrador' : 'Archivado'}
                         </span>
                         <span className="sm:hidden">
-                          {doc.status === 'pending' ? 'Pend.' :
-                           doc.status === 'in_progress' ? 'Proc.' :
-                           doc.status === 'completed' ? 'Comp.' : 'Arch.'}
+                          {doc.status === 'PENDING' ? 'Pend.' :
+                           doc.status === 'IN_PROGRESS' ? 'Proc.' :
+                           doc.status === 'COMPLETED' ? 'Comp.' :
+                           doc.status === 'DRAFT' ? 'Borr.' : 'Arch.'}
                         </span>
                       </StatusBadge>
                     </div>
