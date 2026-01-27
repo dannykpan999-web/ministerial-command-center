@@ -91,9 +91,27 @@ export class DocumentsService {
     // Create document
     const { tags, ...documentData } = createDocumentDto;
 
+    // Ensure entityId and responsibleId are provided (required by Prisma schema)
+    if (!documentData.entityId || !documentData.responsibleId) {
+      throw new BadRequestException('Entity ID and Responsible ID are required');
+    }
+
     const document = await this.prisma.document.create({
       data: {
-        ...documentData,
+        title: documentData.title,
+        type: documentData.type,
+        direction: documentData.direction,
+        classification: documentData.classification,
+        channel: documentData.channel,
+        origin: documentData.origin,
+        entityId: documentData.entityId,
+        responsibleId: documentData.responsibleId,
+        expedienteId: documentData.expedienteId,
+        priority: documentData.priority,
+        content: documentData.content,
+        isDraft: documentData.isDraft,
+        receivedAt: documentData.receivedAt,
+        sentAt: documentData.sentAt,
         correlativeNumber,
         status,
         createdById: userId,
