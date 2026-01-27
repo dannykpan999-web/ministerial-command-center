@@ -9,13 +9,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('entities')
 @Controller('entities')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
 export class EntitiesController {
   constructor(private entitiesService: EntitiesService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'GABINETE')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new entity' })
   @ApiResponse({ status: 201, description: 'Entity created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -26,16 +26,14 @@ export class EntitiesController {
   }
 
   @Get()
-  @Roles('ADMIN', 'GABINETE', 'REVISOR', 'LECTOR')
-  @ApiOperation({ summary: 'Get all entities' })
+  @ApiOperation({ summary: 'Get all entities (public)' })
   @ApiResponse({ status: 200, description: 'Entities retrieved successfully' })
   findAll() {
     return this.entitiesService.findAll();
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'GABINETE', 'REVISOR', 'LECTOR')
-  @ApiOperation({ summary: 'Get entity by ID' })
+  @ApiOperation({ summary: 'Get entity by ID (public)' })
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiResponse({ status: 200, description: 'Entity retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
@@ -44,7 +42,9 @@ export class EntitiesController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'GABINETE')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update entity' })
   @ApiParam({ name: 'id', description: 'Entity ID' })
   @ApiResponse({ status: 200, description: 'Entity updated successfully' })
@@ -55,7 +55,9 @@ export class EntitiesController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete entity (soft delete, Admin only)' })
   @ApiParam({ name: 'id', description: 'Entity ID' })

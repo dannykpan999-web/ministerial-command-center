@@ -11,7 +11,12 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UploadedFiles,
+  UseInterceptors,
+  Res,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -20,6 +25,9 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
+import { PdfService } from './pdf.service';
+import { FileUploadService } from './file-upload.service';
+import { Response } from 'express';
 import { CreateDocumentDto, DocumentStatus } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { QueryDocumentDto } from './dto/query-document.dto';
@@ -35,7 +43,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly documentsService: DocumentsService) {}
+  constructor(
+    private readonly documentsService: DocumentsService,
+    private readonly pdfService: PdfService,
+    private readonly fileUploadService: FileUploadService,
+  ) {}
 
   @Post()
   @Roles('ADMIN', 'GABINETE', 'REVISOR')
@@ -176,5 +188,51 @@ export class DocumentsController {
   @ApiResponse({ status: 404, description: 'Document or user not found' })
   assign(@Param('id') id: string, @Body() assignDto: AssignDocumentDto) {
     return this.documentsService.assign(id, assignDto);
+  }
+
+  @Get(':id/pdf')
+  @Roles('ADMIN', 'GABINETE', 'REVISOR', 'LECTOR')
+  @ApiOperation({ summary: 'Generate and download PDF of document' })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  @ApiResponse({ status: 200, description: 'PDF generated successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadPdf(@Param('id') id: string, @Res() res: Response) {
+    const document = await this.documentsService.findOne(id);
+    return this.pdfService.generateDocumentPdf(document, res);
+  }
+
+  @Post(':id/files')
+  @Roles('ADMIN', 'GABINETE', 'REVISOR')
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    }),
+  )
+  @ApiOperation({ summary: 'Upload files to document with OCR and AI processing' })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  @ApiResponse({ status: 201, description: 'Files uploaded successfully with OCR text extraction' })
+  @ApiResponse({ status: 400, description: 'Invalid file or file validation failed' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async uploadFiles(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req,
+  ) {
+    return await this.fileUploadService.uploadDocumentFiles(
+      id,
+      files,
+      req.user.id,
+    );
+  }
+
+  @Delete(':id/files/:fileId')
+  @Roles('ADMIN', 'GABINETE', 'REVISOR')
+  @ApiOperation({ summary: 'Delete file from document and cloud storage' })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  @ApiParam({ name: 'fileId', description: 'File UUID' })
+  @ApiResponse({ status: 200, description: 'File deleted successfully' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  async deleteFile(@Param('id') id: string, @Param('fileId') fileId: string) {
+    return await this.fileUploadService.deleteDocumentFile(id, fileId);
   }
 }

@@ -68,6 +68,8 @@ import {
   Briefcase,
   Edit,
   Trash2,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { entities, entityTypeLabels } from '@/lib/mockData';
 import { format } from 'date-fns';
@@ -75,9 +77,13 @@ import { es } from 'date-fns/locale';
 import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
 import { EditDocumentDialog } from '@/components/documents/EditDocumentDialog';
 import { useInboxDocuments, useArchiveDocument } from '@/hooks/useDocuments';
+import { documentsApi } from '@/lib/api/documents.api';
+import { entitiesApi, EntityType } from '@/lib/api/entities.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 export default function InboxPage() {
   const { t } = useLanguage();
@@ -85,11 +91,23 @@ export default function InboxPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<string>('all');
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [classificationFilter, setClassificationFilter] = useState<string>('all');
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [decreeDialogOpen, setDecreeDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Fetch all entities for filtering
+  const { data: allEntities = [] } = useQuery({
+    queryKey: ['entities'],
+    queryFn: entitiesApi.getAll,
+  });
+
+  // Filter embassies from all entities
+  const embassies = allEntities.filter((entity) => entity.type === EntityType.EMBASSY && entity.isActive);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -111,10 +129,21 @@ export default function InboxPage() {
   // Reset to first page when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, entityFilter, statusFilter, classificationFilter]);
+  }, [debouncedSearch, entityFilter, statusFilter, classificationFilter, entityTypeFilter]);
+
+  // Reset entity type filter when switching to Internal classification
+  useMemo(() => {
+    if (classificationFilter === 'INTERNAL') {
+      setEntityTypeFilter('all');
+      setEntityFilter('all');
+    }
+  }, [classificationFilter]);
 
   // Fetch inbox documents with real API
   const { data: inboxData, isLoading: loading } = useInboxDocuments(queryParams);
+
+  // Archive document mutation
+  const archiveDocument = useArchiveDocument();
 
   const documents = inboxData?.data || [];
   const filteredDocs = documents; // Already filtered by API
@@ -127,6 +156,123 @@ export default function InboxPage() {
   const openDecreeDialog = (doc: any) => {
     setSelectedDocument(doc);
     setDecreeDialogOpen(true);
+  };
+
+  const handleEdit = (doc: any) => {
+    setSelectedDocument(doc);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (doc: any) => {
+    setSelectedDocument(doc);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (selectedDocument) {
+      archiveDocument.mutate(selectedDocument.id, {
+        onSuccess: () => {
+          setDeleteDialogOpen(false);
+          setSelectedDocument(null);
+        },
+      });
+    }
+  };
+
+  const handleDownloadPdf = async (doc: any) => {
+    try {
+      toast.loading('Generando PDF...');
+      const pdfBlob = await documentsApi.downloadPdf(doc.id);
+
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `documento-${doc.correlativeNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success('PDF descargado exitosamente');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al descargar PDF');
+      console.error('PDF download error:', error);
+    }
+  };
+
+  const handlePrint = async (doc: any) => {
+    try {
+      toast.loading('Preparando impresión...');
+      const pdfBlob = await documentsApi.downloadPdf(doc.id);
+
+      // Create URL for PDF
+      const url = window.URL.createObjectURL(pdfBlob);
+
+      // Open in new window for printing
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+          toast.dismiss();
+          toast.success('Documento listo para imprimir');
+        };
+      } else {
+        toast.dismiss();
+        toast.error('Por favor habilite las ventanas emergentes');
+      }
+
+      // Clean up after a delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al preparar impresión');
+      console.error('Print error:', error);
+    }
+  };
+
+  const handleBulkDownloadPdfs = async () => {
+    if (selectedIds.length === 0) return;
+
+    const selectedDocs = filteredDocs.filter((doc: any) => selectedIds.includes(doc.id));
+    toast.loading(`Descargando ${selectedDocs.length} documentos...`);
+
+    try {
+      for (const doc of selectedDocs) {
+        await handleDownloadPdf(doc);
+        // Small delay between downloads
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      toast.dismiss();
+      toast.success(`${selectedDocs.length} documentos descargados`);
+      setSelectedIds([]);
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al descargar algunos documentos');
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(`¿Archivar ${selectedIds.length} documentos seleccionados?`);
+    if (!confirmed) return;
+
+    toast.loading(`Archivando ${selectedIds.length} documentos...`);
+
+    try {
+      for (const id of selectedIds) {
+        archiveDocument.mutate(id);
+      }
+      toast.dismiss();
+      toast.success(`${selectedIds.length} documentos archivados`);
+      setSelectedIds([]);
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al archivar algunos documentos');
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -269,23 +415,87 @@ export default function InboxPage() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Embassy Filter - Only show for External classification */}
+        {classificationFilter === 'EXTERNAL' && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select value={entityTypeFilter} onValueChange={(value) => {
+              setEntityTypeFilter(value);
+              // Reset entity filter when type changes
+              if (value !== 'EMBASSY') {
+                setEntityFilter('all');
+              }
+            }}>
+              <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-full">
+                <SelectValue placeholder="Tipo de Entidad Externa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="EMBASSY">🏛️ Embajadas</SelectItem>
+                <SelectItem value="PUBLIC_COMPANY">🏢 Empresas Públicas</SelectItem>
+                <SelectItem value="PRIVATE_COMPANY">💼 Empresas Privadas</SelectItem>
+                <SelectItem value="INTERNATIONAL_ORG">🌍 Organizaciones Internacionales</SelectItem>
+                <SelectItem value="GOVERNMENT_MINISTRY">🏛️ Ministerios</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Specific Embassy Selector - Only show when EMBASSY is selected */}
+            {entityTypeFilter === 'EMBASSY' && embassies.length > 0 && (
+              <Select value={entityFilter} onValueChange={setEntityFilter}>
+                <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-full">
+                  <SelectValue placeholder="Seleccionar Embajada" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[60vh] sm:max-h-80">
+                  <SelectItem value="all">Todas las embajadas ({embassies.length})</SelectItem>
+                  {embassies.map((embassy) => (
+                    <SelectItem key={embassy.id} value={embassy.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="text-base">🏳️</span>
+                        <span className="truncate text-xs sm:text-sm">{embassy.name}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bulk actions */}
       {selectedIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4 p-3 bg-muted rounded-lg animate-fade-in">
-          <span className="text-sm text-muted-foreground">
-            {selectedIds.length} seleccionado(s)
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg animate-fade-in shadow-sm">
+          <span className="text-sm font-medium">
+            {selectedIds.length} documento(s) seleccionado(s)
           </span>
-          <div className="flex gap-2 sm:ml-auto">
-            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
-              <FolderOpen className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Abrir expediente</span>
-              <span className="sm:hidden">Expediente</span>
+          <div className="flex gap-2 sm:ml-auto flex-wrap">
+            <Button variant="outline" size="sm" onClick={handleBulkDownloadPdfs} className="flex-1 sm:flex-none">
+              <Download className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Descargar PDFs</span>
+              <span className="sm:hidden">PDFs</span>
             </Button>
             <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <UserPlus className="h-4 w-4 mr-1" />
-              Asignar
+              <span className="hidden sm:inline">Asignar</span>
+              <span className="sm:hidden">Asignar</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkArchive}
+              className="flex-1 sm:flex-none text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Archivar</span>
+              <span className="sm:hidden">Archivar</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+              className="flex-1 sm:flex-none"
+            >
+              Cancelar
             </Button>
           </div>
         </div>
@@ -411,6 +621,24 @@ export default function InboxPage() {
                             <DropdownMenuItem>
                               <PenTool className="h-4 w-4 mr-2" />
                               Enviar a firma
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleDownloadPdf(doc)}>
+                              <Download className="h-4 w-4 mr-2 text-blue-600" />
+                              Descargar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handlePrint(doc)}>
+                              <Printer className="h-4 w-4 mr-2 text-green-600" />
+                              Imprimir
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleEdit(doc)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(doc)} className="text-red-600">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Archivar
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -542,6 +770,24 @@ export default function InboxPage() {
                                   <UserPlus className="h-3.5 w-3.5 mr-2" />
                                   Asignar
                                 </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleDownloadPdf(doc)}>
+                                  <Download className="h-3.5 w-3.5 mr-2 text-blue-600" />
+                                  PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handlePrint(doc)}>
+                                  <Printer className="h-3.5 w-3.5 mr-2 text-green-600" />
+                                  Imprimir
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleEdit(doc)}>
+                                  <Edit className="h-3.5 w-3.5 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs text-red-600" onClick={() => handleDelete(doc)}>
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Archivar
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -605,6 +851,49 @@ export default function InboxPage() {
           }}
         />
       )}
+
+      {/* Edit Document Dialog */}
+      {selectedDocument && (
+        <EditDocumentDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Archivar documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedDocument && (
+                <>
+                  ¿Está seguro de que desea archivar el documento "{selectedDocument.title}"?
+                  <br />
+                  <span className="text-xs text-muted-foreground">
+                    Número: {selectedDocument.correlativeNumber}
+                  </span>
+                  <br /><br />
+                  El documento será movido a archivados y podrá restaurarse más tarde.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveDocument.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={archiveDocument.isPending}
+            >
+              {archiveDocument.isPending ? 'Archivando...' : 'Archivar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Scroll to Top Button */}
       <ScrollToTop />

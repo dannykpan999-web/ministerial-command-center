@@ -3,10 +3,12 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { QrService } from './qr.service';
 import { CreateDocumentDto, DocumentStatus } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { QueryDocumentDto } from './dto/query-document.dto';
@@ -20,11 +22,14 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     private prisma: PrismaService,
     private correlativeNumberService: CorrelativeNumberService,
     private auditService: AuditService,
     private notificationsService: NotificationsService,
+    private qrService: QrService,
   ) {}
 
   /**
@@ -118,6 +123,22 @@ export class DocumentsService {
       },
     });
 
+    // Generate QR code for document
+    try {
+      const qrCode = await this.qrService.generateDocumentQR(document.id);
+
+      // Update document with QR code
+      await this.prisma.document.update({
+        where: { id: document.id },
+        data: { qrCode },
+      });
+
+      this.logger.log(`QR code generated for document ${correlativeNumber}`);
+    } catch (error) {
+      this.logger.error(`Failed to generate QR code: ${error.message}`);
+      // Don't throw - QR generation is not critical
+    }
+
     // Audit log
     await this.auditService.logDocumentAction(
       userId,
@@ -126,7 +147,35 @@ export class DocumentsService {
       { documentData: { ...documentData, correlativeNumber, status } },
     );
 
-    return document;
+    // Return document with QR code
+    return this.prisma.document.findUnique({
+      where: { id: document.id },
+      include: {
+        entity: true,
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        responsible: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        expediente: true,
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+    });
   }
 
   /**

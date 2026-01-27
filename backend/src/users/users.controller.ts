@@ -9,13 +9,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('users')
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
 export class UsersController {
   constructor(private usersService: UsersService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new user (Admin only)' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -27,20 +27,21 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('ADMIN', 'GABINETE', 'REVISOR', 'LECTOR')
-  @ApiOperation({ summary: 'Get all users' })
+  @ApiOperation({ summary: 'Get all users (public)' })
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOperation({ summary: 'Get user by ID (public)' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'GABINETE')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update user' })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
@@ -50,7 +51,9 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Deactivate user (soft delete, Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
@@ -62,7 +65,9 @@ export class UsersController {
   }
 
   @Post(':id/activate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate user (Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })

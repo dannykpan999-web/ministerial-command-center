@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,101 +21,83 @@ import {
   Tag,
   FolderOpen
 } from 'lucide-react';
-import {
-  entities,
-  documents,
-  getEntityById,
-  getUserById,
-  Document,
-  Entity
-} from '@/lib/mockData';
+import { entitiesApi } from '@/lib/api/entities.api';
+import { documentsApi } from '@/lib/api/documents.api';
+import { useDocuments } from '@/hooks/useDocuments';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-// Archived documents mock
-const archivedDocuments: Document[] = [
-  ...documents.filter(d => d.status === 'archived' || d.status === 'completed'),
-  {
-    id: 'arch1',
-    correlativeNumber: 'ENT-2023-004521',
-    title: 'Resolución de concesión portuaria 2023',
-    type: 'Resolución',
-    entityId: 'e1',
-    responsibleId: 'u2',
-    status: 'archived',
-    direction: 'in',
-    channel: 'Plataforma digital',
-    origin: 'Dirección General de Puertos',
-    tags: ['Archivo', 'Información'],
-    createdAt: new Date('2023-06-15'),
-    updatedAt: new Date('2023-06-20'),
-    content: 'RESOLUCIÓN N° 2023-0456\n\nVisto el expediente N° EXP-2023-00234, referente a la solicitud de renovación de concesión portuaria presentada por Terminal Marítima S.A.\n\nCONSIDERANDO:\n\nQue, la empresa solicitante ha cumplido con todos los requisitos establecidos en el Reglamento de Concesiones Portuarias...\n\nSE RESUELVE:\n\nArtículo 1°.- Aprobar la renovación de la concesión portuaria por un período de 10 años.\n\nArtículo 2°.- Notificar a las partes interesadas.\n\nRegistrese, comuníquese y archívese.',
-  },
-  {
-    id: 'arch2',
-    correlativeNumber: 'ENT-2023-003892',
-    title: 'Informe de auditoría de telecomunicaciones',
-    type: 'Informe',
-    entityId: 'e2',
-    responsibleId: 'u3',
-    status: 'archived',
-    direction: 'in',
-    channel: 'Correo electrónico',
-    origin: 'Contraloría General',
-    tags: ['Confidencial', 'Archivo'],
-    createdAt: new Date('2023-05-10'),
-    updatedAt: new Date('2023-05-15'),
-    content: 'INFORME DE AUDITORÍA N° 2023-089\n\nOBJETIVO:\nEvaluar el cumplimiento de las obligaciones de los operadores de telecomunicaciones.\n\nALCANCE:\nPeríodo: Enero - Diciembre 2022\n\nRESULTADOS:\n1. Se verificó el cumplimiento del 95% de las obligaciones contractuales.\n2. Se identificaron 3 observaciones menores.\n3. Se recomienda implementar mejoras en el sistema de monitoreo.\n\nCONCLUSIÓN:\nEl sector presenta un nivel satisfactorio de cumplimiento normativo.',
-  },
-  {
-    id: 'arch3',
-    correlativeNumber: 'SAL-2023-002341',
-    title: 'Convenio marco de cooperación técnica',
-    type: 'Acuerdo',
-    entityId: 'e3',
-    responsibleId: 'u1',
-    status: 'archived',
-    direction: 'out',
-    channel: 'Mensajería física',
-    origin: 'Gabinete Ministerial',
-    tags: ['Internacional', 'Archivo'],
-    createdAt: new Date('2023-04-20'),
-    updatedAt: new Date('2023-04-25'),
-    content: 'CONVENIO MARCO DE COOPERACIÓN TÉCNICA\n\nEntre el Ministerio de la República y la Agencia de Cooperación Internacional.\n\nCLÁUSULA PRIMERA: OBJETO\nEl presente convenio tiene por objeto establecer las bases de cooperación técnica...\n\nCLÁUSULA SEGUNDA: COMPROMISOS\nAmbas partes se comprometen a:\na) Intercambiar información técnica\nb) Facilitar la participación de expertos\nc) Promover actividades conjuntas\n\nCLÁUSULA TERCERA: VIGENCIA\nEl presente convenio tendrá una vigencia de 3 años.',
-  },
-];
 
 export default function ArchivePage() {
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<any>(null);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
 
-  const getDocumentsByEntity = (entityId: string) => {
-    return archivedDocuments.filter(d => d.entityId === entityId);
+  // Fetch entities
+  const { data: entities = [] } = useQuery({
+    queryKey: ['entities'],
+    queryFn: entitiesApi.getAll,
+  });
+
+  // Fetch archived documents
+  const { data: documentsData } = useDocuments({
+    status: 'ARCHIVED',
+    entityId: selectedEntity?.id,
+    search: searchQuery || undefined,
+  });
+
+  const archivedDocuments = documentsData?.data || [];
+
+  // Count documents by entity
+  const getDocumentCountByEntity = (entityId: string) => {
+    const entityDocs = archivedDocuments.filter((d: any) => d.entityId === entityId);
+    return entityDocs.length;
   };
 
   const filteredEntities = entities.filter(entity =>
     entity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entity.code.toLowerCase().includes(searchQuery.toLowerCase())
+    entity.shortName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredDocuments = selectedEntity
-    ? getDocumentsByEntity(selectedEntity.id).filter(doc =>
-        doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.correlativeNumber.toLowerCase().includes(searchQuery.toLowerCase())
+    ? archivedDocuments.filter((doc: any) =>
+        doc.entityId === selectedEntity.id &&
+        (doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc.correlativeNumber.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : [];
 
-  const handleOpenDocument = (doc: Document) => {
+  const handleOpenDocument = (doc: any) => {
     setSelectedDocument(doc);
     setViewerOpen(true);
   };
 
+  // Handle PDF download
+  const handleDownloadPdf = async (doc: any) => {
+    try {
+      toast.loading('Generando PDF...');
+      const pdfBlob = await documentsApi.downloadPdf(doc.id);
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `documento-${doc.correlativeNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.dismiss();
+      toast.success('PDF descargado exitosamente');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al descargar PDF');
+    }
+  };
+
   const statusLabels: Record<string, string> = {
-    archived: 'Archivado',
-    completed: 'Completado',
+    ARCHIVED: 'Archivado',
+    COMPLETED: 'Completado',
   };
 
   return (
@@ -137,16 +120,7 @@ export default function ArchivePage() {
             Volver
           </Button>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <div
-            className="flex items-center gap-2 px-2 py-1 rounded-md"
-            style={{ backgroundColor: `${selectedEntity.color}15` }}
-          >
-            <div
-              className="h-5 w-5 rounded text-[10px] font-bold flex items-center justify-center text-white"
-              style={{ backgroundColor: selectedEntity.color }}
-            >
-              {selectedEntity.code}
-            </div>
+          <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-primary/10">
             <span className="font-medium">{selectedEntity.name}</span>
           </div>
         </div>
@@ -167,7 +141,7 @@ export default function ArchivePage() {
       {!selectedEntity ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredEntities.map(entity => {
-            const docCount = getDocumentsByEntity(entity.id).length;
+            const docCount = getDocumentCountByEntity(entity.id);
             return (
               <Card
                 key={entity.id}
@@ -176,11 +150,8 @@ export default function ArchivePage() {
               >
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div
-                      className="h-12 w-12 rounded-lg flex items-center justify-center text-primary-foreground font-bold"
-                      style={{ backgroundColor: entity.color }}
-                    >
-                      {entity.code}
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
+                      {entity.shortName?.substring(0, 2) || entity.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1">
                       <h3 className="font-medium">{entity.name}</h3>
@@ -209,8 +180,7 @@ export default function ArchivePage() {
               </CardContent>
             </Card>
           ) : (
-            filteredDocuments.map(doc => {
-              const responsible = getUserById(doc.responsibleId);
+            filteredDocuments.map((doc: any) => {
               return (
                 <Card
                   key={doc.id}
@@ -235,13 +205,13 @@ export default function ArchivePage() {
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {format(doc.createdAt, 'dd MMM yyyy', { locale: es })}
+                            {format(new Date(doc.createdAt), 'dd MMM yyyy', { locale: es })}
                           </span>
                           <span className="flex items-center gap-1">
                             <User className="h-3 w-3" />
-                            {responsible?.name}
+                            {doc.responsible ? `${doc.responsible.firstName} ${doc.responsible.lastName}` : 'N/A'}
                           </span>
-                          {doc.tags.length > 0 && (
+                          {doc.tags && doc.tags.length > 0 && (
                             <span className="flex items-center gap-1">
                               <Tag className="h-3 w-3" />
                               {doc.tags.slice(0, 2).join(', ')}
@@ -288,7 +258,7 @@ export default function ArchivePage() {
                       </p>
                       <h2 className="text-xl font-semibold">{selectedDocument.title}</h2>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {selectedDocument.type} · {format(selectedDocument.createdAt, 'dd MMMM yyyy', { locale: es })}
+                        {selectedDocument.type} · {format(new Date(selectedDocument.createdAt), 'dd MMMM yyyy', { locale: es })}
                       </p>
                     </div>
 
@@ -304,7 +274,7 @@ export default function ArchivePage() {
                   <Button variant="outline" onClick={() => setViewerOpen(false)}>
                     Cerrar
                   </Button>
-                  <Button>
+                  <Button onClick={() => handleDownloadPdf(selectedDocument)}>
                     <Download className="h-4 w-4 mr-2" />
                     Descargar PDF
                   </Button>
@@ -327,11 +297,11 @@ export default function ArchivePage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Dirección</span>
-                          <span className="font-medium">{selectedDocument.direction === 'in' ? 'Entrada' : 'Salida'}</span>
+                          <span className="font-medium">{selectedDocument.direction === 'IN' ? 'Entrada' : 'Salida'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Canal</span>
-                          <span className="font-medium">{selectedDocument.channel}</span>
+                          <span className="font-medium">{selectedDocument.channel || 'N/A'}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -343,19 +313,21 @@ export default function ArchivePage() {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Fecha de creación</span>
-                          <span className="font-medium">{format(selectedDocument.createdAt, 'dd/MM/yyyy')}</span>
+                          <span className="font-medium">{format(new Date(selectedDocument.createdAt), 'dd/MM/yyyy')}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Última actualización</span>
-                          <span className="font-medium">{format(selectedDocument.updatedAt, 'dd/MM/yyyy')}</span>
+                          <span className="font-medium">{format(new Date(selectedDocument.updatedAt), 'dd/MM/yyyy')}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Responsable</span>
-                          <span className="font-medium">{getUserById(selectedDocument.responsibleId)?.name}</span>
+                          <span className="font-medium">
+                            {selectedDocument.responsible ? `${selectedDocument.responsible.firstName} ${selectedDocument.responsible.lastName}` : 'N/A'}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Entidad</span>
-                          <span className="font-medium">{getEntityById(selectedDocument.entityId)?.name}</span>
+                          <span className="font-medium">{selectedDocument.entity?.name || 'N/A'}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -365,10 +337,11 @@ export default function ArchivePage() {
                     <CardContent className="p-4 space-y-3">
                       <h4 className="font-medium text-sm text-muted-foreground">Etiquetas</h4>
                       <div className="flex flex-wrap gap-2">
-                        {selectedDocument.tags.map(tag => (
-                          <Badge key={tag} variant="secondary">{tag}</Badge>
-                        ))}
-                        {selectedDocument.tags.length === 0 && (
+                        {selectedDocument.tags && selectedDocument.tags.length > 0 ? (
+                          selectedDocument.tags.map((tag: string) => (
+                            <Badge key={tag} variant="secondary">{tag}</Badge>
+                          ))
+                        ) : (
                           <span className="text-sm text-muted-foreground">Sin etiquetas</span>
                         )}
                       </div>

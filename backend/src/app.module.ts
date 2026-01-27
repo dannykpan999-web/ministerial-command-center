@@ -6,6 +6,8 @@ import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmailModule } from './email/email.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { StorageModule } from './storage/storage.module';
+import { OcrModule } from './ocr/ocr.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { DepartmentsModule } from './departments/departments.module';
@@ -36,6 +38,10 @@ import { AppController } from './app.controller';
     EmailModule,
     // WebSocket (Global)
     WebSocketModule,
+    // Storage Service (Global - R2/S3)
+    StorageModule,
+    // OCR Service (Global - Text extraction + AI)
+    OcrModule,
     // Feature modules
     AuthModule,
     UsersModule,

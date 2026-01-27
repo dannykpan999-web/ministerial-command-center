@@ -149,4 +149,51 @@ export const documentsApi = {
     });
     return response.data;
   },
+
+  // Download document as PDF
+  downloadPdf: async (id: string): Promise<Blob> => {
+    const response = await axiosInstance.get(`/documents/${id}/pdf`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Upload files to document with OCR processing
+  uploadFiles: async (
+    documentId: string,
+    files: File[],
+    onProgress?: (progress: number) => void
+  ) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await axiosInstance.post(
+      `/documents/${documentId}/files`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total && onProgress) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress(percentCompleted);
+          }
+        },
+      }
+    );
+    return response.data;
+  },
+
+  // Delete file from document
+  deleteFile: async (documentId: string, fileId: string) => {
+    const response = await axiosInstance.delete(
+      `/documents/${documentId}/files/${fileId}`
+    );
+    return response.data;
+  },
 };

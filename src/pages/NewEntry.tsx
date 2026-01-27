@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { FileUpload, type UploadedFile } from '@/components/documents/FileUpload';
+import { useCreateDocument } from '@/hooks/useDocuments';
+import { entitiesApi } from '@/lib/api/entities.api';
+import { usersApi } from '@/lib/api/users.api';
+import { documentsApi, type CreateDocumentDto } from '@/lib/api/documents.api';
+import { toast as sonnerToast } from 'sonner';
 import {
-  Upload,
   FileText,
   Check,
   ChevronRight,
@@ -29,7 +35,6 @@ import {
   Hash,
   Info,
 } from 'lucide-react';
-import { entities, users, documentTypes, channels, tags } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -41,13 +46,19 @@ const steps = [
   { number: 5, title: 'Confirmación', key: 'wizard.step5' },
 ];
 
+const documentTypes = ['Oficio', 'Memorando', 'Circular', 'Resolución', 'Decreto', 'Informe', 'Solicitud', 'Carta', 'Acuerdo', 'Otro'];
+const channels = ['Correo electrónico', 'Plataforma digital', 'Mensajería física', 'Presencial', 'Fax', 'WhatsApp'];
+const tags = ['Urgente', 'Confidencial', 'Información', 'Acción requerida', 'FYI', 'Revisión', 'Aprobación'];
+
 export default function NewEntryWizard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [formData, setFormData] = useState({
-    file: null as File | null,
+    title: '',
     channel: '',
     origin: '',
     extractedText: '',
@@ -55,9 +66,46 @@ export default function NewEntryWizard() {
     entityId: '',
     selectedTags: [] as string[],
     responsibleId: '',
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+    classification: 'EXTERNAL' as 'INTERNAL' | 'EXTERNAL',
   });
 
+  const createDocument = useCreateDocument();
+
+  // Fetch real entities and users
+  const { data: entities = [] } = useQuery({
+    queryKey: ['entities'],
+    queryFn: entitiesApi.getAll,
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.getAll,
+  });
+
+  // Debug: Log entities and users when loaded
+  useEffect(() => {
+    if (entities.length > 0) {
+      console.log('=== ENTITIES LOADED ===');
+      console.log('Total entities:', entities.length);
+      console.log('First entity:', entities[0]);
+      console.log('First entity ID:', entities[0]?.id);
+      console.log('======================');
+    }
+  }, [entities]);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      console.log('=== USERS LOADED ===');
+      console.log('Total users:', users.length);
+      console.log('First user:', users[0]);
+      console.log('First user ID:', users[0]?.id);
+      console.log('===================');
+    }
+  }, [users]);
+
   const updateField = (field: string, value: any) => {
+    console.log(`Setting ${field} to:`, value);
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -73,7 +121,7 @@ export default function NewEntryWizard() {
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return formData.file && formData.channel && formData.origin;
+        return uploadedFiles.length > 0 && formData.channel && formData.origin && formData.title;
       case 2:
         return true;
       case 3:
@@ -85,12 +133,149 @@ export default function NewEntryWizard() {
     }
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: 'Documento registrado',
-      description: 'El documento ha sido registrado exitosamente con el número ENT-2024-001543',
-    });
-    navigate('/inbox');
+  const handleSubmit = async () => {
+    try {
+      setUploading(true);
+
+      // Validate required fields
+      if (!formData.title || formData.title.trim() === '') {
+        sonnerToast.error('Por favor ingrese el título del documento');
+        setUploading(false);
+        return;
+      }
+
+      if (!formData.documentType || formData.documentType.trim() === '') {
+        sonnerToast.error('Por favor seleccione el tipo de documento');
+        setUploading(false);
+        return;
+      }
+
+      if (!formData.entityId || formData.entityId.trim() === '') {
+        sonnerToast.error('Por favor seleccione una entidad');
+        setUploading(false);
+        return;
+      }
+
+      if (!formData.responsibleId || formData.responsibleId.trim() === '') {
+        sonnerToast.error('Por favor asigne un responsable');
+        setUploading(false);
+        return;
+      }
+
+      if (!formData.channel || formData.channel.trim() === '') {
+        sonnerToast.error('Por favor seleccione el canal de recepción');
+        setUploading(false);
+        return;
+      }
+
+      if (!formData.origin || formData.origin.trim() === '') {
+        sonnerToast.error('Por favor ingrese la procedencia');
+        setUploading(false);
+        return;
+      }
+
+      sonnerToast.loading('Registrando documento...');
+
+      // Create document
+      const documentData: CreateDocumentDto = {
+        title: formData.title,
+        type: formData.documentType,
+        direction: 'IN',
+        classification: formData.classification,
+        channel: formData.channel,
+        origin: formData.origin,
+        entityId: formData.entityId,
+        responsibleId: formData.responsibleId,
+        priority: formData.priority,
+        content: formData.extractedText || undefined,
+        tags: formData.selectedTags,
+        isDraft: false,
+      };
+
+      // Debug: Log what we're sending
+      console.log('=== DATA BEING SENT TO API ===');
+      console.log('entityId:', formData.entityId);
+      console.log('entityId type:', typeof formData.entityId);
+      console.log('entityId length:', formData.entityId?.length);
+      console.log('responsibleId:', formData.responsibleId);
+      console.log('responsibleId type:', typeof formData.responsibleId);
+      console.log('responsibleId length:', formData.responsibleId?.length);
+      console.log('Full document data:', JSON.stringify(documentData, null, 2));
+      console.log('==============================');
+
+      const createdDoc = await documentsApi.create(documentData);
+
+      // Upload files if any (with OCR processing)
+      if (uploadedFiles.length > 0 && createdDoc?.id) {
+        sonnerToast.loading('Subiendo archivos y extrayendo texto (OCR)...');
+
+        const filesToUpload = uploadedFiles
+          .filter((f) => f.file)
+          .map((f) => f.file!);
+
+        try {
+          const uploadResult = await documentsApi.uploadFiles(
+            createdDoc.id,
+            filesToUpload
+          );
+
+          // If OCR extracted text and document content is empty, update document
+          if (uploadResult.extractedText && !documentData.content) {
+            await documentsApi.update(createdDoc.id, {
+              content: uploadResult.extractedText,
+            });
+          }
+
+          sonnerToast.dismiss();
+          sonnerToast.success(
+            `Documento y ${uploadResult.files?.length || 0} archivo(s) subidos con OCR`
+          );
+        } catch (uploadError: any) {
+          console.error('Error uploading files:', uploadError);
+          sonnerToast.dismiss();
+          sonnerToast.error(
+            'Documento creado pero error al subir archivos: ' +
+              (uploadError.response?.data?.message || 'Error desconocido')
+          );
+        }
+      } else {
+        sonnerToast.dismiss();
+        sonnerToast.success('Documento registrado exitosamente');
+      }
+
+      navigate('/inbox');
+    } catch (error: any) {
+      sonnerToast.dismiss();
+
+      // Enhanced error reporting
+      console.error('=== DOCUMENT CREATION ERROR ===');
+      console.error('Status:', error.response?.status);
+      console.error('Error data:', error.response?.data);
+
+      // Show individual error messages if it's an array
+      const errorMessage = error.response?.data?.message;
+      if (Array.isArray(errorMessage)) {
+        console.error('VALIDATION ERRORS:');
+        errorMessage.forEach((msg: string, index: number) => {
+          console.error(`  ${index + 1}. ${msg}`);
+        });
+      }
+
+      console.error('Full error:', error);
+      console.error('==============================');
+
+      // Show detailed error message
+      if (Array.isArray(errorMessage)) {
+        // Multiple validation errors
+        errorMessage.forEach((msg: string) => sonnerToast.error(msg));
+      } else if (errorMessage) {
+        sonnerToast.error(errorMessage);
+      } else {
+        sonnerToast.error('Error al registrar documento. Revisa la consola para más detalles.');
+      }
+    } finally {
+      setUploading(false);
+    }
   };
 
   const correlativeNumber = 'ENT-2024-001543';
@@ -141,38 +326,35 @@ export default function NewEntryWizard() {
           {/* Step 1: Upload */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <div
-                className={cn(
-                  'border-2 border-dashed rounded-xl p-12 text-center transition-colors',
-                  formData.file ? 'border-success bg-success/5' : 'border-border hover:border-primary/50'
-                )}
-              >
-                {formData.file ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="h-12 w-12 text-success" />
-                    <p className="font-medium">{formData.file.name}</p>
-                    <Button variant="ghost" size="sm" onClick={() => updateField('file', null)}>
-                      Cambiar archivo
-                    </Button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer flex flex-col items-center gap-3">
-                    <Upload className="h-12 w-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">{t('wizard.upload_doc')}</p>
-                    <p className="text-xs text-muted-foreground">{t('wizard.supported_formats')}</p>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => updateField('file', e.target.files?.[0] || null)}
-                    />
-                  </label>
-                )}
+              <div className="space-y-2">
+                <Label>Título del documento *</Label>
+                <Input
+                  placeholder="Ej: Solicitud de ampliación de concesión portuaria"
+                  value={formData.title}
+                  onChange={(e) => updateField('title', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Archivos del documento</Label>
+                <FileUpload
+                  existingFiles={uploadedFiles}
+                  onFilesChange={setUploadedFiles}
+                  maxSize={10}
+                  acceptedTypes={[
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'image/jpeg',
+                    'image/png',
+                    'image/jpg',
+                  ]}
+                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>{t('wizard.channel')}</Label>
+                  <Label>{t('wizard.channel')} *</Label>
                   <Select value={formData.channel} onValueChange={(v) => updateField('channel', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar canal" />
@@ -185,12 +367,41 @@ export default function NewEntryWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>{t('wizard.origin')}</Label>
+                  <Label>{t('wizard.origin')} *</Label>
                   <Input
                     placeholder="Nombre o entidad de origen"
                     value={formData.origin}
                     onChange={(e) => updateField('origin', e.target.value)}
                   />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Clasificación *</Label>
+                  <Select value={formData.classification} onValueChange={(v: 'INTERNAL' | 'EXTERNAL') => updateField('classification', v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="INTERNAL">📋 Interna</SelectItem>
+                      <SelectItem value="EXTERNAL">🌍 Externa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prioridad</Label>
+                  <Select value={formData.priority} onValueChange={(v: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') => updateField('priority', v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">🟢 Baja</SelectItem>
+                      <SelectItem value="MEDIUM">🟡 Media</SelectItem>
+                      <SelectItem value="HIGH">🟠 Alta</SelectItem>
+                      <SelectItem value="URGENT">🔴 Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -209,10 +420,13 @@ export default function NewEntryWizard() {
                 <Label>{t('wizard.ocr_extracted')}</Label>
                 <Textarea
                   className="h-80 resize-none"
-                  placeholder="Texto extraído del documento..."
-                  value={formData.extractedText || 'Asunto: Solicitud de ampliación de concesión portuaria\n\nEstimado Sr. Ministro,\n\nPor medio de la presente, Terminal Marítima S.A. solicita formalmente la ampliación del plazo de la concesión otorgada mediante Resolución No. 2020-0234, correspondiente a las instalaciones del muelle norte del puerto principal.\n\nLa solicitud se fundamenta en las inversiones adicionales realizadas durante el período 2022-2024, las cuales ascienden a un monto de USD 45 millones...'}
+                  placeholder="El texto será extraído automáticamente de los archivos subidos. Puede editar el texto extraído aquí..."
+                  value={formData.extractedText}
                   onChange={(e) => updateField('extractedText', e.target.value)}
                 />
+                <p className="text-sm text-muted-foreground">
+                  💡 Sugerencia: Puede escribir o pegar el texto del documento aquí manualmente
+                </p>
               </div>
             </div>
           )}
@@ -241,9 +455,11 @@ export default function NewEntryWizard() {
                       <SelectValue placeholder="Seleccionar entidad" />
                     </SelectTrigger>
                     <SelectContent>
-                      {entities.map(entity => (
-                        <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
-                      ))}
+                      {entities
+                        .filter(e => e.isActive)
+                        .map(entity => (
+                          <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -298,9 +514,13 @@ export default function NewEntryWizard() {
                       <SelectValue placeholder="Seleccionar responsable" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                      ))}
+                      {users
+                        .filter(u => u.isActive)
+                        .map(user => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.firstName} {user.lastName}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -340,6 +560,10 @@ export default function NewEntryWizard() {
                     <dd>{entities.find(e => e.id === formData.entityId)?.name || '-'}</dd>
                   </div>
                   <div>
+                    <dt className="text-sm text-muted-foreground">Clasificación</dt>
+                    <dd>{formData.classification === 'INTERNAL' ? 'Interna' : 'Externa'}</dd>
+                  </div>
+                  <div>
                     <dt className="text-sm text-muted-foreground">Canal</dt>
                     <dd>{formData.channel || '-'}</dd>
                   </div>
@@ -348,8 +572,22 @@ export default function NewEntryWizard() {
                     <dd>{formData.origin || '-'}</dd>
                   </div>
                   <div>
+                    <dt className="text-sm text-muted-foreground">Prioridad</dt>
+                    <dd>
+                      {formData.priority === 'LOW' && '🟢 Baja'}
+                      {formData.priority === 'MEDIUM' && '🟡 Media'}
+                      {formData.priority === 'HIGH' && '🟠 Alta'}
+                      {formData.priority === 'URGENT' && '🔴 Urgente'}
+                    </dd>
+                  </div>
+                  <div>
                     <dt className="text-sm text-muted-foreground">Responsable</dt>
-                    <dd>{users.find(u => u.id === formData.responsibleId)?.name || '-'}</dd>
+                    <dd>
+                      {(() => {
+                        const user = users.find(u => u.id === formData.responsibleId);
+                        return user ? `${user.firstName} ${user.lastName}` : '-';
+                      })()}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-sm text-muted-foreground">Etiquetas</dt>
@@ -402,8 +640,8 @@ export default function NewEntryWizard() {
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit}>
-              {t('common.confirm')}
+            <Button onClick={handleSubmit} disabled={uploading}>
+              {uploading ? 'Registrando...' : t('common.confirm')}
             </Button>
           )}
         </div>

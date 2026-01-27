@@ -1,7 +1,6 @@
 import {
   IsString,
   IsEnum,
-  IsUUID,
   IsOptional,
   IsBoolean,
   MinLength,
@@ -65,12 +64,14 @@ export class CreateDocumentDto {
   @IsOptional()
   origin?: string;
 
-  @ApiProperty({ description: 'Entity UUID' })
-  @IsUUID()
+  @ApiProperty({ description: 'Entity ID (CUID)' })
+  @IsString()
+  @MinLength(20)
   entityId: string;
 
-  @ApiProperty({ description: 'Responsible user UUID' })
-  @IsUUID()
+  @ApiProperty({ description: 'Responsible user ID (CUID)' })
+  @IsString()
+  @MinLength(20)
   responsibleId: string;
 
   @ApiPropertyOptional({ enum: DocumentPriority, description: 'Document priority' })
@@ -83,8 +84,8 @@ export class CreateDocumentDto {
   @IsOptional()
   content?: string;
 
-  @ApiPropertyOptional({ description: 'Expediente UUID' })
-  @IsUUID()
+  @ApiPropertyOptional({ description: 'Expediente ID (CUID)' })
+  @IsString()
   @IsOptional()
   expedienteId?: string;
 
