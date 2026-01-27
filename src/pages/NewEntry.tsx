@@ -57,6 +57,8 @@ export default function NewEntryWizard() {
   const [currentStep, setCurrentStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [processingOCR, setProcessingOCR] = useState(false);
+  const [tempDocumentId, setTempDocumentId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     channel: '',
@@ -133,6 +135,79 @@ export default function NewEntryWizard() {
     }
   };
 
+  // Handle next step - process OCR when moving from Step 1 to Step 2
+  const handleNextStep = async () => {
+    if (currentStep === 1 && uploadedFiles.length > 0 && !tempDocumentId) {
+      // Process OCR before moving to step 2 (only if not already processed)
+      await processOCR();
+    }
+    setCurrentStep(prev => prev + 1);
+  };
+
+  // Process OCR: create draft document and upload files
+  const processOCR = async () => {
+    try {
+      setProcessingOCR(true);
+      sonnerToast.loading('Procesando OCR y extrayendo texto...');
+
+      // Create a draft document
+      const draftData: CreateDocumentDto = {
+        title: formData.title,
+        type: 'Borrador',
+        direction: 'IN',
+        classification: formData.classification,
+        channel: formData.channel,
+        origin: formData.origin,
+        priority: formData.priority,
+        isDraft: true,
+      };
+
+      const draft = await documentsApi.create(draftData);
+      setTempDocumentId(draft.id);
+
+      // Upload files with OCR
+      if (uploadedFiles.length > 0) {
+        const filesToUpload = uploadedFiles
+          .filter((f) => f.file)
+          .map((f) => f.file!);
+
+        const uploadResult = await documentsApi.uploadFiles(draft.id, filesToUpload);
+
+        // Update extracted text
+        if (uploadResult.extractedText) {
+          updateField('extractedText', uploadResult.extractedText);
+          sonnerToast.dismiss();
+          sonnerToast.success(`OCR completado: ${uploadResult.extractedText.length} caracteres extraídos`);
+        } else {
+          sonnerToast.dismiss();
+          sonnerToast.info('Archivos subidos. No se extrajo texto.');
+        }
+
+        // Update uploaded files with server IDs
+        if (uploadResult.files && uploadResult.files.length > 0) {
+          const updatedFiles = uploadedFiles.map((localFile) => {
+            const serverFile = uploadResult.files.find((sf: any) => sf.fileName === localFile.name);
+            if (serverFile) {
+              return {
+                ...localFile,
+                id: serverFile.id,
+                url: serverFile.storageUrl,
+              };
+            }
+            return localFile;
+          });
+          setUploadedFiles(updatedFiles);
+        }
+      }
+    } catch (error: any) {
+      console.error('OCR processing error:', error);
+      sonnerToast.dismiss();
+      sonnerToast.error('Error al procesar OCR: ' + (error.response?.data?.message || 'Error desconocido'));
+    } finally {
+      setProcessingOCR(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setUploading(true);
@@ -176,69 +251,65 @@ export default function NewEntryWizard() {
 
       sonnerToast.loading('Registrando documento...');
 
-      // Create document
-      const documentData: CreateDocumentDto = {
-        title: formData.title,
-        type: formData.documentType,
-        direction: 'IN',
-        classification: formData.classification,
-        channel: formData.channel,
-        origin: formData.origin,
-        entityId: formData.entityId,
-        responsibleId: formData.responsibleId,
-        priority: formData.priority,
-        content: formData.extractedText || undefined,
-        tags: formData.selectedTags,
-        isDraft: false,
-      };
+      let documentId = tempDocumentId;
 
-      // Debug: Log what we're sending
-      console.log('=== DATA BEING SENT TO API ===');
-      console.log('entityId:', formData.entityId);
-      console.log('entityId type:', typeof formData.entityId);
-      console.log('entityId length:', formData.entityId?.length);
-      console.log('responsibleId:', formData.responsibleId);
-      console.log('responsibleId type:', typeof formData.responsibleId);
-      console.log('responsibleId length:', formData.responsibleId?.length);
-      console.log('Full document data:', JSON.stringify(documentData, null, 2));
-      console.log('==============================');
+      // If we have a draft document, update it instead of creating new one
+      if (tempDocumentId) {
+        const updateData = {
+          title: formData.title,
+          type: formData.documentType,
+          classification: formData.classification,
+          channel: formData.channel,
+          origin: formData.origin,
+          entityId: formData.entityId,
+          responsibleId: formData.responsibleId,
+          priority: formData.priority,
+          content: formData.extractedText || undefined,
+          tags: formData.selectedTags,
+          isDraft: false,
+        };
 
-      const createdDoc = await documentsApi.create(documentData);
-
-      // Upload files if any (with OCR processing)
-      if (uploadedFiles.length > 0 && createdDoc?.id) {
-        sonnerToast.loading('Subiendo archivos y extrayendo texto (OCR)...');
-
-        const filesToUpload = uploadedFiles
-          .filter((f) => f.file)
-          .map((f) => f.file!);
-
-        try {
-          const uploadResult = await documentsApi.uploadFiles(
-            createdDoc.id,
-            filesToUpload
-          );
-
-          // If OCR extracted text and document content is empty, update document
-          if (uploadResult.extractedText && !documentData.content) {
-            await documentsApi.update(createdDoc.id, {
-              content: uploadResult.extractedText,
-            });
-          }
-
-          sonnerToast.dismiss();
-          sonnerToast.success(
-            `Documento y ${uploadResult.files?.length || 0} archivo(s) subidos con OCR`
-          );
-        } catch (uploadError: any) {
-          console.error('Error uploading files:', uploadError);
-          sonnerToast.dismiss();
-          sonnerToast.error(
-            'Documento creado pero error al subir archivos: ' +
-              (uploadError.response?.data?.message || 'Error desconocido')
-          );
-        }
+        await documentsApi.update(tempDocumentId, updateData);
+        sonnerToast.dismiss();
+        sonnerToast.success('Documento registrado exitosamente');
       } else {
+        // Create new document (fallback if OCR wasn't processed)
+        const documentData: CreateDocumentDto = {
+          title: formData.title,
+          type: formData.documentType,
+          direction: 'IN',
+          classification: formData.classification,
+          channel: formData.channel,
+          origin: formData.origin,
+          entityId: formData.entityId,
+          responsibleId: formData.responsibleId,
+          priority: formData.priority,
+          content: formData.extractedText || undefined,
+          tags: formData.selectedTags,
+          isDraft: false,
+        };
+
+        const createdDoc = await documentsApi.create(documentData);
+        documentId = createdDoc.id;
+
+        // Upload files if they weren't uploaded during OCR
+        if (uploadedFiles.length > 0 && uploadedFiles.some(f => !f.url)) {
+          sonnerToast.loading('Subiendo archivos...');
+
+          const filesToUpload = uploadedFiles
+            .filter((f) => f.file && !f.url)
+            .map((f) => f.file!);
+
+          if (filesToUpload.length > 0) {
+            try {
+              await documentsApi.uploadFiles(createdDoc.id, filesToUpload);
+            } catch (uploadError: any) {
+              console.error('Error uploading files:', uploadError);
+              sonnerToast.error('Error al subir archivos: ' + (uploadError.response?.data?.message || 'Error desconocido'));
+            }
+          }
+        }
+
         sonnerToast.dismiss();
         sonnerToast.success('Documento registrado exitosamente');
       }
@@ -252,26 +323,13 @@ export default function NewEntryWizard() {
       console.error('Status:', error.response?.status);
       console.error('Error data:', error.response?.data);
 
-      // Show individual error messages if it's an array
       const errorMessage = error.response?.data?.message;
       if (Array.isArray(errorMessage)) {
-        console.error('VALIDATION ERRORS:');
-        errorMessage.forEach((msg: string, index: number) => {
-          console.error(`  ${index + 1}. ${msg}`);
-        });
-      }
-
-      console.error('Full error:', error);
-      console.error('==============================');
-
-      // Show detailed error message
-      if (Array.isArray(errorMessage)) {
-        // Multiple validation errors
         errorMessage.forEach((msg: string) => sonnerToast.error(msg));
       } else if (errorMessage) {
         sonnerToast.error(errorMessage);
       } else {
-        sonnerToast.error('Error al registrar documento. Revisa la consola para más detalles.');
+        sonnerToast.error('Error al registrar documento');
       }
     } finally {
       setUploading(false);
@@ -412,8 +470,35 @@ export default function NewEntryWizard() {
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label>{t('wizard.ocr_original')}</Label>
-                <div className="h-80 bg-muted rounded-lg flex items-center justify-center border">
-                  <FileText className="h-16 w-16 text-muted-foreground" />
+                <div className="h-80 bg-muted rounded-lg border overflow-hidden">
+                  {processingOCR ? (
+                    <div className="h-full flex flex-col items-center justify-center gap-3">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                      <p className="text-sm text-muted-foreground">Procesando OCR...</p>
+                    </div>
+                  ) : uploadedFiles.length > 0 ? (
+                    <div className="h-full overflow-auto p-4 space-y-2">
+                      <p className="text-sm font-medium mb-3">Archivos subidos ({uploadedFiles.length}):</p>
+                      {uploadedFiles.map((file, index) => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 bg-background rounded-lg border">
+                          <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                              {file.url && ' • Subido con OCR ✓'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <FileText className="h-16 w-16 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
@@ -423,9 +508,14 @@ export default function NewEntryWizard() {
                   placeholder="El texto será extraído automáticamente de los archivos subidos. Puede editar el texto extraído aquí..."
                   value={formData.extractedText}
                   onChange={(e) => updateField('extractedText', e.target.value)}
+                  disabled={processingOCR}
                 />
                 <p className="text-sm text-muted-foreground">
-                  💡 Sugerencia: Puede escribir o pegar el texto del documento aquí manualmente
+                  {formData.extractedText ? (
+                    <>✓ {formData.extractedText.length} caracteres extraídos - puede editar el texto si es necesario</>
+                  ) : (
+                    <>💡 Sugerencia: Puede escribir o pegar el texto del documento aquí manualmente</>
+                  )}
                 </p>
               </div>
             </div>
@@ -635,9 +725,12 @@ export default function NewEntryWizard() {
             {t('common.save_draft')}
           </Button>
           {currentStep < 5 ? (
-            <Button onClick={() => setCurrentStep(prev => prev + 1)} disabled={!canProceed()}>
-              {t('common.next')}
-              <ChevronRight className="h-4 w-4 ml-1" />
+            <Button
+              onClick={handleNextStep}
+              disabled={!canProceed() || processingOCR}
+            >
+              {processingOCR ? 'Procesando OCR...' : t('common.next')}
+              {!processingOCR && <ChevronRight className="h-4 w-4 ml-1" />}
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={uploading}>
