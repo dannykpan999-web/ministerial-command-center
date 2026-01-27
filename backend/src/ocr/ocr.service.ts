@@ -84,9 +84,10 @@ export class OcrService {
     try {
       this.logger.log(`Extracting PDF: ${file.originalname} (${file.size} bytes)`);
 
-      // Dynamic import for pdf-parse
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(file.buffer);
+      // Import pdf-parse
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const pdf = require('pdf-parse');
+      const data = await pdf(file.buffer);
 
       this.logger.log(`PDF parsing complete. Pages: ${data.numpages}, Text length: ${data.text?.length || 0}`);
 
@@ -99,14 +100,10 @@ export class OcrService {
         };
       }
 
-      // PDF might be scanned image - try OpenAI if available
-      if (this.openai && this.enableAI) {
-        this.logger.log('PDF appears to be scanned. Trying OpenAI Vision...');
-        return await this.extractWithOpenAI(file);
-      }
-
-      // No text found
-      this.logger.warn('No text found in PDF (might be scanned images without OCR)');
+      // No text found - PDF might be scanned images
+      // Note: OpenAI Vision API doesn't support PDF files directly
+      // For scanned PDFs, user would need to upload images instead
+      this.logger.warn('No text found in PDF (might be scanned images). Upload images for OCR instead.');
       return {
         text: '',
         method: 'pdf-parse',
@@ -115,13 +112,13 @@ export class OcrService {
       this.logger.error(`PDF parsing failed: ${error.message}`);
       this.logger.error(`PDF error details: ${JSON.stringify(error)}`);
 
-      // Try OpenAI as fallback
-      if (this.openai && this.enableAI) {
-        this.logger.log('Falling back to OpenAI for PDF processing...');
-        return await this.extractWithOpenAI(file);
-      }
-
-      throw error;
+      // Note: OpenAI Vision API doesn't support PDF files
+      // Return empty text instead of throwing error
+      this.logger.warn('PDF parsing failed. Returning empty text.');
+      return {
+        text: '',
+        method: 'pdf-parse',
+      };
     }
   }
 
