@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,7 @@ const tags = ['Urgente', 'Confidencial', 'Información', 'Acción requerida', 'F
 
 export default function NewEntryWizard() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
@@ -150,7 +152,16 @@ export default function NewEntryWizard() {
       setProcessingOCR(true);
       sonnerToast.loading('Procesando OCR y extrayendo texto...');
 
-      // Create a draft document
+      // Validate user and entities are loaded
+      if (!user || !user.id) {
+        throw new Error('Usuario no autenticado');
+      }
+      if (!entities || entities.length === 0) {
+        throw new Error('No hay entidades disponibles');
+      }
+
+      // Create a draft document with temporary entityId and responsibleId
+      // These will be updated later when user completes Steps 3 and 4
       const draftData: CreateDocumentDto = {
         title: formData.title,
         type: 'Borrador',
@@ -160,6 +171,9 @@ export default function NewEntryWizard() {
         origin: formData.origin,
         priority: formData.priority,
         isDraft: true,
+        // Temporary values for draft - will be updated in final submission
+        entityId: entities[0].id,
+        responsibleId: user.id,
       };
 
       const draft = await documentsApi.create(draftData);

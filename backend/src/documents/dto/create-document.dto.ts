@@ -64,15 +64,17 @@ export class CreateDocumentDto {
   @IsOptional()
   origin?: string;
 
-  @ApiProperty({ description: 'Entity ID (CUID)' })
+  @ApiPropertyOptional({ description: 'Entity ID (CUID) - required for non-draft documents' })
   @IsString()
   @MinLength(20)
-  entityId: string;
+  @IsOptional()
+  entityId?: string;
 
-  @ApiProperty({ description: 'Responsible user ID (CUID)' })
+  @ApiPropertyOptional({ description: 'Responsible user ID (CUID) - required for non-draft documents' })
   @IsString()
   @MinLength(20)
-  responsibleId: string;
+  @IsOptional()
+  responsibleId?: string;
 
   @ApiPropertyOptional({ enum: DocumentPriority, description: 'Document priority' })
   @IsEnum(DocumentPriority)

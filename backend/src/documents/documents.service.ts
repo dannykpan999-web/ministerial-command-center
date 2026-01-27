@@ -36,22 +36,36 @@ export class DocumentsService {
    * Create a new document
    */
   async create(createDocumentDto: CreateDocumentDto, userId: string) {
-    // Validate entity exists
-    const entity = await this.prisma.entity.findUnique({
-      where: { id: createDocumentDto.entityId },
-    });
-    if (!entity) {
-      throw new NotFoundException(`Entity with ID ${createDocumentDto.entityId} not found`);
+    // For non-draft documents, entityId and responsibleId are required
+    if (!createDocumentDto.isDraft) {
+      if (!createDocumentDto.entityId) {
+        throw new BadRequestException('Entity ID is required for non-draft documents');
+      }
+      if (!createDocumentDto.responsibleId) {
+        throw new BadRequestException('Responsible user ID is required for non-draft documents');
+      }
     }
 
-    // Validate responsible user exists
-    const responsibleUser = await this.prisma.user.findUnique({
-      where: { id: createDocumentDto.responsibleId },
-    });
-    if (!responsibleUser) {
-      throw new NotFoundException(
-        `User with ID ${createDocumentDto.responsibleId} not found`,
-      );
+    // Validate entity exists (only if provided)
+    if (createDocumentDto.entityId) {
+      const entity = await this.prisma.entity.findUnique({
+        where: { id: createDocumentDto.entityId },
+      });
+      if (!entity) {
+        throw new NotFoundException(`Entity with ID ${createDocumentDto.entityId} not found`);
+      }
+    }
+
+    // Validate responsible user exists (only if provided)
+    if (createDocumentDto.responsibleId) {
+      const responsibleUser = await this.prisma.user.findUnique({
+        where: { id: createDocumentDto.responsibleId },
+      });
+      if (!responsibleUser) {
+        throw new NotFoundException(
+          `User with ID ${createDocumentDto.responsibleId} not found`,
+        );
+      }
     }
 
     // Validate expediente if provided
