@@ -84,16 +84,24 @@ export class FileUploadService {
         // Extract text using OCR
         let extractedText = '';
         try {
+          this.logger.log(`Starting OCR extraction for ${file.originalname} (${file.mimetype})`);
           const ocrResult = await this.ocrService.extractText(file);
           extractedText = ocrResult.text;
 
-          this.logger.log(
-            `OCR completed for ${file.originalname} using ${ocrResult.method} (${extractedText.length} chars)`,
-          );
+          if (extractedText && extractedText.length > 0) {
+            this.logger.log(
+              `OCR completed for ${file.originalname} using ${ocrResult.method} (${extractedText.length} chars)`,
+            );
+          } else {
+            this.logger.warn(
+              `OCR completed but extracted no text from ${file.originalname} using ${ocrResult.method}`,
+            );
+          }
         } catch (ocrError) {
-          this.logger.warn(
+          this.logger.error(
             `OCR failed for ${file.originalname}: ${ocrError.message}`,
           );
+          this.logger.error(`OCR Error stack: ${ocrError.stack}`);
         }
 
         // Save file metadata to database

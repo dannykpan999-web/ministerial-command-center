@@ -82,9 +82,13 @@ export class OcrService {
    */
   private async extractFromPdf(file: Express.Multer.File): Promise<OcrResult> {
     try {
+      this.logger.log(`Extracting PDF: ${file.originalname} (${file.size} bytes)`);
+
       // Dynamic import for pdf-parse
       const pdfParse = require('pdf-parse');
       const data = await pdfParse(file.buffer);
+
+      this.logger.log(`PDF parsing complete. Pages: ${data.numpages}, Text length: ${data.text?.length || 0}`);
 
       // If pdf-parse succeeded and got text
       if (data.text && data.text.trim().length > 0) {
@@ -102,13 +106,14 @@ export class OcrService {
       }
 
       // No text found
-      this.logger.warn('No text found in PDF');
+      this.logger.warn('No text found in PDF (might be scanned images without OCR)');
       return {
         text: '',
         method: 'pdf-parse',
       };
     } catch (error) {
       this.logger.error(`PDF parsing failed: ${error.message}`);
+      this.logger.error(`PDF error details: ${JSON.stringify(error)}`);
 
       // Try OpenAI as fallback
       if (this.openai && this.enableAI) {
@@ -125,11 +130,15 @@ export class OcrService {
    */
   private async extractFromImage(file: Express.Multer.File): Promise<OcrResult> {
     try {
-      this.logger.log('Starting Tesseract OCR for image...');
+      this.logger.log(`Starting Tesseract OCR for image: ${file.originalname} (${file.size} bytes)`);
 
       const worker = await createWorker('spa'); // Spanish language
+      this.logger.log('Tesseract worker created, recognizing text...');
+
       const { data } = await worker.recognize(file.buffer);
       await worker.terminate();
+
+      this.logger.log(`Tesseract complete. Confidence: ${data.confidence.toFixed(2)}%, Text length: ${data.text?.length || 0}`);
 
       // If tesseract got good results (confidence > 60%)
       if (data.confidence > 60 && data.text.trim().length > 0) {
@@ -152,6 +161,7 @@ export class OcrService {
       }
 
       // Return tesseract result anyway
+      this.logger.warn(`Returning low-confidence Tesseract result: ${data.text?.length || 0} chars`);
       return {
         text: data.text.trim(),
         method: 'tesseract',
@@ -159,6 +169,7 @@ export class OcrService {
       };
     } catch (error) {
       this.logger.error(`Tesseract OCR failed: ${error.message}`);
+      this.logger.error(`Tesseract error stack: ${error.stack}`);
 
       // Try OpenAI as fallback
       if (this.openai && this.enableAI) {
