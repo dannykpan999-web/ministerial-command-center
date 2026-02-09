@@ -12,7 +12,12 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "ckeditor5/dist/browser/ckeditor5.js": path.resolve(__dirname, "./node_modules/ckeditor5/dist/browser/ckeditor5.js"),
+      "ckeditor5/dist/browser/ckeditor5.css": path.resolve(__dirname, "./node_modules/ckeditor5/dist/browser/ckeditor5.css"),
     },
+  },
+  optimizeDeps: {
+    include: ['ckeditor5'],
   },
   build: {
     rollupOptions: {

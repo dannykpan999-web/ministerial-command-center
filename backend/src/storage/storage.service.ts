@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 export interface UploadResult {
   key: string;
@@ -15,37 +15,33 @@ export interface UploadResult {
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private s3Client: S3Client;
-  private bucketName: string;
-  private publicUrl: string;
+  private readonly uploadPath: string;
+  private readonly baseUrl: string;
 
   constructor(private configService: ConfigService) {
-    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
-    const endpoint = this.configService.get<string>('R2_ENDPOINT');
-    const region = this.configService.get<string>('R2_REGION', 'auto');
+    // Use local filesystem storage
+    this.uploadPath = join(process.cwd(), 'uploads');
+    this.baseUrl = this.configService.get<string>('API_URL', 'http://localhost:3000');
 
-    this.bucketName = this.configService.get<string>('R2_BUCKET_NAME', 'ministerial-documents');
-    this.publicUrl = this.configService.get<string>('R2_PUBLIC_URL', '');
+    // Ensure upload directory exists
+    this.ensureUploadDirectory();
 
-    if (!accessKeyId || !secretAccessKey || !endpoint) {
-      this.logger.warn('R2 credentials not configured. File uploads will fail.');
+    this.logger.log('Local Storage Service initialized');
+    this.logger.log(`Upload path: ${this.uploadPath}`);
+  }
+
+  private async ensureUploadDirectory() {
+    try {
+      await fs.mkdir(this.uploadPath, { recursive: true });
+      await fs.mkdir(join(this.uploadPath, 'documents'), { recursive: true });
+      await fs.mkdir(join(this.uploadPath, 'temp'), { recursive: true });
+    } catch (error) {
+      this.logger.error(`Failed to create upload directories: ${error.message}`);
     }
-
-    this.s3Client = new S3Client({
-      region,
-      endpoint,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-    });
-
-    this.logger.log('R2 Storage Service initialized');
   }
 
   /**
-   * Upload file to R2 storage
+   * Upload file to local storage
    */
   async uploadFile(
     file: Express.Multer.File,
@@ -59,27 +55,19 @@ export class StorageService {
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(7);
       const extension = file.originalname.split('.').pop();
-      const key = `${folder}/${timestamp}-${randomString}.${extension}`;
+      const fileName = `${timestamp}-${randomString}.${extension}`;
+      const key = `${folder}/${fileName}`;
 
-      // Upload to R2
-      const command = new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-        Metadata: {
-          originalName: file.originalname,
-          uploadedAt: new Date().toISOString(),
-          hash,
-        },
-      });
+      // Ensure folder exists
+      const folderPath = join(this.uploadPath, folder);
+      await fs.mkdir(folderPath, { recursive: true });
 
-      await this.s3Client.send(command);
+      // Write file to disk
+      const filePath = join(this.uploadPath, key);
+      await fs.writeFile(filePath, file.buffer);
 
       // Generate URL
-      const url = this.publicUrl
-        ? `${this.publicUrl}/${key}`
-        : await this.getSignedUrl(key);
+      const url = `${this.baseUrl}/api/files/serve/${key}`;
 
       this.logger.log(`File uploaded successfully: ${key}`);
 
@@ -97,34 +85,20 @@ export class StorageService {
   }
 
   /**
-   * Get signed URL for private file access (expires in 1 hour)
+   * Get file URL (for local storage, just return the API endpoint)
    */
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-    try {
-      const command = new GetObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-      });
-
-      const url = await getSignedUrl(this.s3Client, command, { expiresIn });
-      return url;
-    } catch (error) {
-      this.logger.error(`Failed to generate signed URL: ${error.message}`);
-      throw new Error(`Failed to generate file URL: ${error.message}`);
-    }
+    // For local storage, return public URL (no expiration needed for now)
+    return `${this.baseUrl}/api/files/serve/${key}`;
   }
 
   /**
-   * Delete file from R2 storage
+   * Delete file from local storage
    */
   async deleteFile(key: string): Promise<void> {
     try {
-      const command = new DeleteObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-      });
-
-      await this.s3Client.send(command);
+      const filePath = join(this.uploadPath, key);
+      await fs.unlink(filePath);
       this.logger.log(`File deleted successfully: ${key}`);
     } catch (error) {
       this.logger.error(`Failed to delete file: ${error.message}`);
@@ -140,26 +114,69 @@ export class StorageService {
   }
 
   /**
-   * Get file from R2 storage
+   * Get file from local storage
    */
   async getFile(key: string): Promise<Buffer> {
     try {
-      const command = new GetObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-      });
-
-      const response = await this.s3Client.send(command);
-      const chunks: Uint8Array[] = [];
-
-      for await (const chunk of response.Body as any) {
-        chunks.push(chunk);
-      }
-
-      return Buffer.concat(chunks);
+      const filePath = join(this.uploadPath, key);
+      const buffer = await fs.readFile(filePath);
+      return buffer;
     } catch (error) {
       this.logger.error(`Failed to get file: ${error.message}`);
       throw new Error(`File retrieval failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Download file (alias for getFile)
+   */
+  async downloadFile(key: string): Promise<Buffer> {
+    return this.getFile(key);
+  }
+
+  /**
+   * Upload file from buffer
+   */
+  async uploadFileBuffer(
+    buffer: Buffer,
+    fileName: string,
+    mimeType: string,
+    folder: string = 'documents',
+  ): Promise<UploadResult> {
+    try {
+      // Generate hash for file integrity
+      const hash = this.generateFileHash(buffer);
+
+      // Generate unique key
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const extension = fileName.split('.').pop();
+      const uniqueFileName = `${timestamp}-${randomString}.${extension}`;
+      const key = `${folder}/${uniqueFileName}`;
+
+      // Ensure folder exists
+      const folderPath = join(this.uploadPath, folder);
+      await fs.mkdir(folderPath, { recursive: true });
+
+      // Write file to disk
+      const filePath = join(this.uploadPath, key);
+      await fs.writeFile(filePath, buffer);
+
+      // Generate URL
+      const url = `${this.baseUrl}/api/files/serve/${key}`;
+
+      this.logger.log(`File uploaded from buffer successfully: ${key}`);
+
+      return {
+        key,
+        url,
+        size: buffer.length,
+        mimeType,
+        hash,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to upload buffer: ${error.message}`, error.stack);
+      throw new Error(`Buffer upload failed: ${error.message}`);
     }
   }
 }

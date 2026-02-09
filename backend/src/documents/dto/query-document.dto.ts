@@ -2,7 +2,6 @@ import {
   IsOptional,
   IsString,
   IsEnum,
-  IsUUID,
   IsInt,
   Min,
   Max,
@@ -48,14 +47,14 @@ export class QueryDocumentDto {
   @IsEnum(DocumentClassification)
   classification?: DocumentClassification;
 
-  @ApiPropertyOptional({ description: 'Filter by entity UUID' })
+  @ApiPropertyOptional({ description: 'Filter by entity ID (CUID)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   entityId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by responsible user UUID' })
+  @ApiPropertyOptional({ description: 'Filter by responsible user ID (CUID)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   responsibleId?: string;
 
   @ApiPropertyOptional({ enum: DocumentPriority, description: 'Filter by priority' })
@@ -69,9 +68,9 @@ export class QueryDocumentDto {
   @IsBoolean()
   hasAiSummary?: boolean;
 
-  @ApiPropertyOptional({ description: 'Filter by expediente UUID' })
+  @ApiPropertyOptional({ description: 'Filter by expediente ID (CUID)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   expedienteId?: string;
 
   @ApiPropertyOptional({ description: 'Filter from date (ISO 8601)' })
@@ -93,8 +92,8 @@ export class QueryDocumentDto {
   @IsBoolean()
   isDraft?: boolean;
 
-  @ApiPropertyOptional({ description: 'Filter by created by user UUID' })
+  @ApiPropertyOptional({ description: 'Filter by created by user ID (CUID)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   createdById?: string;
 }

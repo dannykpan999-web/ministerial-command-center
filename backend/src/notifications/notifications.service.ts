@@ -1,17 +1,61 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto, NotificationType } from './dto/create-notification.dto';
 import { QueryNotificationDto } from './dto/query-notification.dto';
 import { createPaginatedResponse, calculateSkip } from '../documents/utils/pagination.util';
 import { Prisma } from '@prisma/client';
 import { WebSocketService } from '../websocket/websocket.service';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+  private emailTransporter: nodemailer.Transporter | null = null;
+
   constructor(
     private prisma: PrismaService,
     private websocketService: WebSocketService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.initializeEmailTransporter();
+  }
+
+  /**
+   * Initialize email transporter based on environment configuration
+   */
+  private initializeEmailTransporter() {
+    const smtpHost = this.configService.get<string>('SMTP_HOST');
+    const sendgridKey = this.configService.get<string>('SENDGRID_API_KEY');
+
+    if (sendgridKey) {
+      // Use SendGrid
+      this.emailTransporter = nodemailer.createTransport({
+        host: 'smtp.sendgrid.net',
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'apikey',
+          pass: sendgridKey,
+        },
+      });
+      this.logger.log('Email transporter initialized with SendGrid');
+    } else if (smtpHost) {
+      // Use custom SMTP
+      this.emailTransporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: parseInt(this.configService.get<string>('SMTP_PORT', '587')),
+        secure: this.configService.get<string>('SMTP_SECURE') === 'true',
+        auth: {
+          user: this.configService.get<string>('SMTP_USER'),
+          pass: this.configService.get<string>('SMTP_PASS'),
+        },
+      });
+      this.logger.log('Email transporter initialized with custom SMTP');
+    } else {
+      this.logger.warn('Email transporter not configured - emails will be logged only');
+    }
+  }
 
   /**
    * Create a notification
@@ -191,18 +235,81 @@ export class NotificationsService {
    * Send email notification (placeholder for actual email service)
    */
   async sendEmailNotification(email: string, subject: string, message: string) {
-    // TODO: Integrate with email service (SendGrid, AWS SES, etc.)
-    console.log(`[EMAIL] To: ${email}, Subject: ${subject}, Message: ${message}`);
-    return { sent: true, method: 'email' };
+    const emailFrom = this.configService.get<string>('EMAIL_FROM', 'noreply@mttsia.gob.gq');
+
+    if (this.emailTransporter) {
+      try {
+        const info = await this.emailTransporter.sendMail({
+          from: emailFrom,
+          to: email,
+          subject: subject,
+          text: message,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background-color: #3B82F6; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin: 0;">Ministerio de Transporte</h1>
+              </div>
+              <div style="padding: 20px; background-color: #f9f9f9;">
+                <h2 style="color: #333;">${subject}</h2>
+                <p style="color: #666; line-height: 1.6;">${message}</p>
+              </div>
+              <div style="padding: 10px; text-align: center; color: #999; font-size: 12px;">
+                <p>Este es un mensaje automático del Sistema de Gestión Ministerial</p>
+              </div>
+            </div>
+          `,
+        });
+        this.logger.log(`Email sent successfully to ${email}: ${info.messageId}`);
+        return { sent: true, method: 'email', messageId: info.messageId };
+      } catch (error) {
+        this.logger.error(`Failed to send email to ${email}:`, error.message);
+        return { sent: false, method: 'email', error: error.message };
+      }
+    } else {
+      // Fallback to console logging if not configured
+      this.logger.log(`[EMAIL - NOT CONFIGURED] To: ${email}, Subject: ${subject}, Message: ${message}`);
+      return { sent: false, method: 'email', error: 'Email service not configured' };
+    }
   }
 
   /**
-   * Send WhatsApp notification (placeholder for actual WhatsApp service)
+   * Send WhatsApp notification via Twilio
+   * NOTE: WhatsApp integration requires installing twilio package separately:
+   *       cd backend && npm install twilio
+   * Then uncomment the implementation below.
    */
   async sendWhatsAppNotification(phone: string, message: string) {
-    // TODO: Integrate with WhatsApp Business API or Twilio
-    console.log(`[WHATSAPP] To: ${phone}, Message: ${message}`);
-    return { sent: true, method: 'whatsapp' };
+    // WhatsApp implementation commented out - install twilio package to enable
+    // Uncomment the code below after running: npm install twilio
+    /*
+    const twilioSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
+    const twilioToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
+    const twilioWhatsappFrom = this.configService.get<string>('TWILIO_WHATSAPP_FROM');
+
+    if (twilioSid && twilioToken && twilioWhatsappFrom) {
+      try {
+        const twilio = await import('twilio');
+        const client = twilio.default(twilioSid, twilioToken);
+
+        const whatsappMessage = await client.messages.create({
+          body: message,
+          from: `whatsapp:${twilioWhatsappFrom}`,
+          to: `whatsapp:${phone}`,
+        });
+
+        this.logger.log(`WhatsApp message sent successfully to ${phone}: ${whatsappMessage.sid}`);
+        return { sent: true, method: 'whatsapp', messageId: whatsappMessage.sid };
+      } catch (error) {
+        this.logger.error(`Failed to send WhatsApp message to ${phone}:`, error.message);
+        return { sent: false, method: 'whatsapp', error: error.message };
+      }
+    }
+    */
+
+    // Fallback to console logging (WhatsApp not implemented)
+    this.logger.log(`[WHATSAPP - NOT IMPLEMENTED] To: ${phone}, Message: ${message}`);
+    this.logger.warn('To enable WhatsApp: Install twilio package and uncomment code in notifications.service.ts');
+    return { sent: false, method: 'whatsapp', error: 'WhatsApp service not implemented' };
   }
 
   /**

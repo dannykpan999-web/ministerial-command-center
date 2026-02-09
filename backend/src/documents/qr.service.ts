@@ -21,8 +21,8 @@ export class QrService {
    */
   async generateDocumentQR(documentId: string): Promise<string> {
     try {
-      // Create URL that points to document details page
-      const documentUrl = `${this.baseUrl}/documents/${documentId}`;
+      // Create URL that points to public document viewer page
+      const documentUrl = `${this.baseUrl}/document/${documentId}`;
 
       // Generate QR code as data URL (base64)
       const qrCodeDataUrl = await QRCode.toDataURL(documentUrl, {
@@ -46,11 +46,61 @@ export class QrService {
   }
 
   /**
+   * Generate enhanced QR code with document details
+   *
+   * Client requirement: QR must contain number + recipients + date
+   * Format: Structured JSON data for verification
+   */
+  async generateEnhancedDocumentQR(data: {
+    documentId: string;
+    documentNumber: string;
+    recipients: string[];
+    date: Date;
+    title?: string;
+  }): Promise<string> {
+    try {
+      // Create structured data for QR code
+      const qrData = {
+        id: data.documentId,
+        number: data.documentNumber,
+        recipients: data.recipients,
+        date: data.date.toISOString().split('T')[0], // YYYY-MM-DD
+        title: data.title,
+        verifyUrl: `${this.baseUrl}/verify/${data.documentId}`,
+      };
+
+      // Convert to JSON string
+      const qrContent = JSON.stringify(qrData);
+
+      // Generate QR code with enhanced data
+      const qrCodeDataUrl = await QRCode.toDataURL(qrContent, {
+        errorCorrectionLevel: 'H', // High error correction (important for official documents)
+        type: 'image/png',
+        width: 400, // Larger for better scanning
+        margin: 3,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF',
+        },
+      });
+
+      this.logger.log(
+        `Enhanced QR code generated for document ${data.documentNumber}`,
+      );
+
+      return qrCodeDataUrl;
+    } catch (error) {
+      this.logger.error(`Failed to generate enhanced QR code: ${error.message}`);
+      throw new Error(`Enhanced QR code generation failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate QR code as buffer (for file upload)
    */
   async generateDocumentQRBuffer(documentId: string): Promise<Buffer> {
     try {
-      const documentUrl = `${this.baseUrl}/documents/${documentId}`;
+      const documentUrl = `${this.baseUrl}/document/${documentId}`;
 
       const qrBuffer = await QRCode.toBuffer(documentUrl, {
         errorCorrectionLevel: 'H',
@@ -80,7 +130,7 @@ export class QrService {
       const verificationData = {
         id: documentId,
         number: correlativeNumber,
-        url: `${this.baseUrl}/documents/${documentId}`,
+        url: `${this.baseUrl}/document/${documentId}`,
         hash: hash ? hash.substring(0, 16) : undefined, // First 16 chars of hash
         verified: new Date().toISOString(),
       };

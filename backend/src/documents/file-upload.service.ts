@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { OcrService } from '../ocr/ocr.service';
 import { ConfigService } from '@nestjs/config';
 import { validateFiles, scanFileContent } from '../common/validators/file-validation';
+import { FileTypeDetectorService } from '../files/services/file-type-detector.service';
 
 export interface UploadFilesResult {
   files: any[];
@@ -23,6 +24,7 @@ export class FileUploadService {
     private storageService: StorageService,
     private ocrService: OcrService,
     private configService: ConfigService,
+    private fileTypeDetector: FileTypeDetectorService,
   ) {
     this.maxFileSize = this.configService.get<number>(
       'MAX_FILE_SIZE',
@@ -72,6 +74,27 @@ export class FileUploadService {
     // Process each file
     for (const file of files) {
       try {
+        // Phase 1: File type detection and security validation
+        this.logger.log(`Detecting file type for ${file.originalname}...`);
+        const validation = await this.fileTypeDetector.validateFileType(file);
+
+        // Reject dangerous files immediately
+        if (!validation.isSafe) {
+          this.logger.error(
+            `SECURITY: Dangerous file detected and rejected: ${file.originalname} - ${validation.message}`,
+          );
+          throw new BadRequestException(
+            `File "${file.originalname}" was rejected for security reasons: ${validation.message}`,
+          );
+        }
+
+        // Log security warnings for flagged files
+        if (!validation.isValid || validation.typeMismatch) {
+          this.logger.warn(
+            `SECURITY WARNING: File flagged for review: ${file.originalname} - ${validation.message}`,
+          );
+        }
+
         // Security scan
         scanFileContent(file);
 
@@ -104,7 +127,7 @@ export class FileUploadService {
           this.logger.error(`OCR Error stack: ${ocrError.stack}`);
         }
 
-        // Save file metadata to database
+        // Save file metadata to database (with Phase 1 security data)
         const documentFile = await this.prisma.documentFile.create({
           data: {
             documentId,
@@ -116,8 +139,21 @@ export class FileUploadService {
             storageUrl: storageResult.url,
             hash: storageResult.hash,
             uploadedById: userId,
+            // Phase 1: Security metadata
+            detectedMimeType: validation.detectedType,
+            declaredMimeType: validation.declaredType,
+            typeMismatch: validation.typeMismatch,
+            isSecure: validation.isSafe && validation.isValid,
+            securityFlags: validation.securityFlags,
           },
         });
+
+        // Log security event if file was flagged
+        if (validation.typeMismatch || validation.securityFlags.length > 0) {
+          this.logger.warn(
+            `File uploaded with security flags: ${file.originalname} - Flags: ${validation.securityFlags.join(', ')}`,
+          );
+        }
 
         uploadedFiles.push(documentFile);
         combinedExtractedText += (extractedText ? extractedText + '\n\n' : '');
@@ -253,5 +289,77 @@ export class FileUploadService {
       this.logger.error(`AI processing failed: ${error.message}`);
       // Don't throw - AI processing is optional
     }
+  }
+
+  /**
+   * Generate AI content for a document (summary, key points, proposed response)
+   * Can be called manually to regenerate AI content
+   */
+  async generateDocumentAI(
+    documentId: string,
+    force: boolean = false,
+  ): Promise<any> {
+    // Get document with files
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: {
+        files: true,
+      },
+    });
+
+    if (!document) {
+      throw new NotFoundException(`Document with ID ${documentId} not found`);
+    }
+
+    // Check if AI content already exists and force is not set
+    if (!force && document.aiSummary && document.aiProposedResponse) {
+      this.logger.log(`AI content already exists for document ${documentId}, skipping generation`);
+      return {
+        message: 'AI content already exists. Use force=true to regenerate.',
+        document,
+      };
+    }
+
+    // Get text content from document
+    let textContent = document.content || '';
+
+    // If no content, try to extract from files
+    if (!textContent && document.files.length > 0) {
+      this.logger.log(`No content field, attempting to re-extract text from ${document.files.length} file(s)`);
+
+      // Note: We can't re-extract from stored files without downloading them
+      // This is a limitation - ideally we should store extracted text separately
+      return {
+        message: 'Document has files but no extracted text content. Please re-upload files to extract text.',
+        files: document.files.length,
+      };
+    }
+
+    // Check minimum text length
+    if (!textContent || textContent.length < 50) {
+      throw new BadRequestException(
+        `Document text is too short for AI processing. Minimum 50 characters required, found ${textContent?.length || 0}. Please upload a document with more content.`,
+      );
+    }
+
+    this.logger.log(`Generating AI content for document ${documentId} (${textContent.length} chars)`);
+
+    // Generate AI content
+    await this.processDocumentWithAI(documentId, textContent, document.type);
+
+    // Fetch updated document
+    const updatedDocument = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: {
+        entity: true,
+        responsible: true,
+        files: true,
+      },
+    });
+
+    return {
+      message: 'AI content generated successfully',
+      document: updatedDocument,
+    };
   }
 }

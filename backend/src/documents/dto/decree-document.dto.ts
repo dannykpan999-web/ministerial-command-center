@@ -16,9 +16,9 @@ export enum NotificationMethod {
 }
 
 export class DecreeDocumentDto {
-  @ApiProperty({ description: 'Array of department UUIDs', type: [String] })
+  @ApiProperty({ description: 'Array of department IDs', type: [String] })
   @IsArray()
-  @IsUUID('4', { each: true })
+  @IsString({ each: true })
   @ArrayMinSize(1, { message: 'At least one department must be selected' })
   departmentIds: string[];
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,9 +33,13 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Get the return URL from navigation state (e.g., from public document view)
+  const returnTo = (location.state as any)?.returnTo || '/dashboard';
 
   const {
     register,
@@ -58,7 +62,8 @@ export default function Login() {
         icon: <CheckCircle2 className="h-5 w-5" />,
         className: 'border-l-4 border-l-green-500',
       });
-      navigate('/dashboard');
+      // Redirect to returnTo URL (from public document view) or default to dashboard
+      navigate(returnTo);
     } catch (err: any) {
       const errorMessage = err.message || 'Error al iniciar sesión. Por favor, intente nuevamente.';
       setError(errorMessage);

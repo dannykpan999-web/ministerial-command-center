@@ -73,7 +73,7 @@ export default function AuditPage() {
   }) || [];
 
   // Pagination
-  const totalPages = logsData?.meta?.totalPages || 1;
+  const totalPages = logsData?.totalPages || 1;
   const canGoPrevious = page > 1;
   const canGoNext = page < totalPages;
 
@@ -392,13 +392,13 @@ export default function AuditPage() {
       )}
 
       {/* Pagination */}
-      {!isUnauthorized && logsData && logsData.meta && logsData.meta.totalPages > 1 && (
+      {!isUnauthorized && logsData && logsData.totalPages && logsData.totalPages > 1 && (
         <Card className="mt-6">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 Mostrando {(page - 1) * limit + 1} -{' '}
-                {Math.min(page * limit, logsData.meta.total)} de {logsData.meta.total}{' '}
+                {Math.min(page * limit, logsData.total)} de {logsData.total}{' '}
                 registros
               </div>
 

@@ -8,6 +8,9 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Trust proxy - required when behind nginx reverse proxy
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   // Security: Helmet middleware
   app.use(helmet());
 

@@ -1,59 +1,119 @@
-import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft,
   FileText,
   Clock,
-  PenTool,
-  History,
-  User,
   Calendar,
-  Building2,
   CheckCircle,
-  Circle,
-  AlertCircle,
+  FolderOpen,
+  ExternalLink,
+  Plus,
+  Search,
 } from 'lucide-react';
-import {
-  getExpedienteById,
-  getEntityById,
-  getUserById,
-  documents,
-  deadlines,
-  signatureFlows,
-  auditLog,
-  delay,
-  Expediente,
-} from '@/lib/mockData';
+import { getExpediente, ExpStatus } from '@/lib/api/expedientes.api';
+import { documentsApi } from '@/lib/api/documents.api';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [expediente, setExpediente] = useState<Expediente | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [addDocDialogOpen, setAddDocDialogOpen] = useState(false);
+  const [selectedDocId, setSelectedDocId] = useState<string>('');
+  const [docSearch, setDocSearch] = useState('');
 
-  useEffect(() => {
-    async function loadData() {
-      await delay(500);
-      const exp = getExpedienteById(id || '');
-      setExpediente(exp || null);
-      setLoading(false);
+  // Fetch expediente with React Query
+  const { data: expediente, isLoading } = useQuery({
+    queryKey: ['expediente', id],
+    queryFn: () => getExpediente(id!),
+    enabled: !!id,
+  });
+
+  // Fetch available documents for adding to expediente
+  const { data: availableDocs } = useQuery({
+    queryKey: ['documents', 'available'],
+    queryFn: () => documentsApi.findAll({ limit: 100 }),
+    enabled: addDocDialogOpen,
+  });
+
+  // Mutation to add document to expediente
+  const addDocMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      return documentsApi.update(documentId, {
+        expedienteId: id,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Documento agregado al expediente exitosamente');
+      queryClient.invalidateQueries({ queryKey: ['expediente', id] });
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setAddDocDialogOpen(false);
+      setSelectedDocId('');
+      setDocSearch('');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al agregar documento');
+    },
+  });
+
+  // Filter available documents (exclude those already in this expediente)
+  const filteredDocs = (availableDocs?.data || []).filter((doc: any) => {
+    const matchesSearch = !docSearch ||
+      doc.title.toLowerCase().includes(docSearch.toLowerCase()) ||
+      doc.correlativeNumber?.toLowerCase().includes(docSearch.toLowerCase());
+    const notInExpediente = doc.expedienteId !== id;
+    return matchesSearch && notInExpediente;
+  });
+
+  // Memoized navigation handlers to prevent React DOM errors
+  const handleBack = useCallback(() => {
+    navigate('/cases');
+  }, [navigate]);
+
+  const handleViewDocument = useCallback((documentId: string) => {
+    navigate(`/document/${documentId}`); // Navigate to document detail page
+  }, [navigate]);
+
+  const handleAddDocument = useCallback(() => {
+    if (!selectedDocId) {
+      toast.error('Debe seleccionar un documento');
+      return;
     }
-    loadData();
-  }, [id]);
+    addDocMutation.mutate(selectedDocId);
+  }, [selectedDocId, addDocMutation]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
@@ -71,33 +131,31 @@ export default function CaseDetail() {
   if (!expediente) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <Button variant="ghost" onClick={() => navigate('/cases')}>
+        <Button variant="ghost" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver
         </Button>
         <div className="mt-12 text-center text-muted-foreground">
-          Expediente no encontrado
+          <FolderOpen className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+          <p>Expediente no encontrado</p>
         </div>
       </div>
     );
   }
 
-  const entity = getEntityById(expediente.entityId);
-  const responsible = getUserById(expediente.responsibleId);
-  const relatedDocs = documents.filter(d => expediente.documentIds.includes(d.id));
-  const relatedDeadlines = deadlines.filter(d => d.expedienteId === expediente.id);
-  const relatedSignatures = signatureFlows.filter(s => s.expedienteId === expediente.id);
-  const relatedAudit = auditLog.filter(a => a.targetId === expediente.id);
+  const relatedDocs = expediente.documents || [];
+  const relatedDeadlines = expediente.deadlines || [];
 
   const statusLabels: Record<string, string> = {
-    open: 'Abierto',
-    pending_signature: 'Pendiente firma',
-    closed: 'Cerrado',
-    archived: 'Archivado',
+    [ExpStatus.OPEN]: 'Abierto',
+    [ExpStatus.IN_PROGRESS]: 'En Progreso',
+    [ExpStatus.CLOSED]: 'Cerrado',
+    [ExpStatus.ARCHIVED]: 'Archivado',
   };
 
   const statusVariants: Record<string, 'success' | 'warning' | 'info' | 'muted'> = {
-    open: 'info',
+    [ExpStatus.OPEN]: 'info',
+    [ExpStatus.IN_PROGRESS]: 'warning',
     pending_signature: 'warning',
     closed: 'success',
     archived: 'muted',
@@ -105,7 +163,7 @@ export default function CaseDetail() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto animate-fade-in">
-      <Button variant="ghost" onClick={() => navigate('/cases')} className="mb-4">
+      <Button variant="ghost" onClick={handleBack} className="mb-4">
         <ArrowLeft className="h-4 w-4 mr-2" />
         Volver a expedientes
       </Button>
@@ -118,21 +176,15 @@ export default function CaseDetail() {
               {statusLabels[expediente.status]}
             </StatusBadge>
           </div>
-          <p className="text-muted-foreground font-mono mt-1">{expediente.number}</p>
+          <p className="text-muted-foreground font-mono mt-1">{expediente.code}</p>
         </div>
-        <Button>
-          <PenTool className="h-4 w-4 mr-2" />
-          Enviar a firma
-        </Button>
       </div>
 
       <Tabs defaultValue="summary" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="summary">{t('cases.summary')}</TabsTrigger>
-          <TabsTrigger value="documents">{t('cases.documents')}</TabsTrigger>
-          <TabsTrigger value="deadlines">{t('cases.deadlines')}</TabsTrigger>
-          <TabsTrigger value="signature">{t('cases.signature')}</TabsTrigger>
-          <TabsTrigger value="history">{t('cases.history')}</TabsTrigger>
+          <TabsTrigger value="summary">Resumen</TabsTrigger>
+          <TabsTrigger value="documents">Documentos ({relatedDocs.length})</TabsTrigger>
+          <TabsTrigger value="deadlines">Plazos ({relatedDeadlines.length})</TabsTrigger>
         </TabsList>
 
         {/* Summary Tab */}
@@ -145,31 +197,33 @@ export default function CaseDetail() {
               <CardContent>
                 <dl className="grid gap-4 sm:grid-cols-2">
                   <div className="flex items-start gap-3">
-                    <Building2 className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <Calendar className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                     <div>
-                      <dt className="text-sm text-muted-foreground">Entidad</dt>
-                      <dd className="font-medium">{entity?.name}</dd>
+                      <dt className="text-sm text-muted-foreground">Fecha de inicio</dt>
+                      <dd className="font-medium">{format(new Date(expediente.startDate), "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <User className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <dt className="text-sm text-muted-foreground">Responsable</dt>
-                      <dd className="font-medium">{responsible?.name}</dd>
+                  {expediente.closedDate && (
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <dt className="text-sm text-muted-foreground">Fecha de cierre</dt>
+                        <dd className="font-medium">{format(new Date(expediente.closedDate), "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="flex items-start gap-3">
                     <Calendar className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                     <div>
                       <dt className="text-sm text-muted-foreground">Fecha de creación</dt>
-                      <dd className="font-medium">{format(expediente.createdAt, "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
+                      <dd className="font-medium">{format(new Date(expediente.createdAt), "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                     <div>
                       <dt className="text-sm text-muted-foreground">Última actualización</dt>
-                      <dd className="font-medium">{format(expediente.updatedAt, "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
+                      <dd className="font-medium">{format(new Date(expediente.updatedAt), "d 'de' MMMM 'de' yyyy", { locale: es })}</dd>
                     </div>
                   </div>
                 </dl>
@@ -189,15 +243,17 @@ export default function CaseDetail() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Documentos</span>
-                  <Badge variant="secondary">{relatedDocs.length}</Badge>
+                  <Badge variant="secondary">{expediente._count?.documents || 0}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Plazos activos</span>
-                  <Badge variant="secondary">{relatedDeadlines.length}</Badge>
+                  <span className="text-sm text-muted-foreground">Plazos</span>
+                  <Badge variant="secondary">{expediente._count?.deadlines || 0}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Firmas pendientes</span>
-                  <Badge variant="secondary">{relatedSignatures.filter(s => s.status === 'pending').length}</Badge>
+                  <span className="text-sm text-muted-foreground">Estado</span>
+                  <StatusBadge variant={statusVariants[expediente.status]}>
+                    {statusLabels[expediente.status]}
+                  </StatusBadge>
                 </div>
               </CardContent>
             </Card>
@@ -207,8 +263,16 @@ export default function CaseDetail() {
         {/* Documents Tab */}
         <TabsContent value="documents">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Documentos asociados</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => setAddDocDialogOpen(true)}
+                className="h-8"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar Documento
+              </Button>
             </CardHeader>
             <CardContent>
               {relatedDocs.length === 0 ? (
@@ -219,15 +283,29 @@ export default function CaseDetail() {
               ) : (
                 <div className="space-y-3">
                   {relatedDocs.map(doc => (
-                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
+                    <div
+                      key={doc.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                    >
                       <FileText className="h-5 w-5 text-muted-foreground" />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{doc.title}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{doc.title}</p>
                         <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {format(doc.createdAt, 'dd MMM yyyy', { locale: es })}
-                      </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(doc.createdAt), 'dd MMM yyyy', { locale: es })}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleViewDocument(doc.id)}
+                          title="Ver documento"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -251,32 +329,39 @@ export default function CaseDetail() {
               ) : (
                 <div className="space-y-3">
                   {relatedDeadlines.map(deadline => {
-                    const user = getUserById(deadline.assignedTo);
+                    const dueDate = new Date(deadline.dueDate);
+                    const now = new Date();
+                    const isOverdue = dueDate < now;
+                    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const isUrgent = daysUntilDue <= 3 && daysUntilDue >= 0;
+
                     return (
                       <div key={deadline.id} className="flex items-center gap-3 p-3 rounded-lg border">
                         <div className={cn(
                           'h-8 w-8 rounded-lg flex items-center justify-center',
-                          deadline.status === 'overdue' ? 'bg-destructive/10 text-destructive' :
-                          deadline.status === 'urgent' ? 'bg-warning/10 text-warning' :
+                          isOverdue ? 'bg-destructive/10 text-destructive' :
+                          isUrgent ? 'bg-warning/10 text-warning' :
                           'bg-muted text-muted-foreground'
                         )}>
                           <Clock className="h-4 w-4" />
                         </div>
                         <div className="flex-1">
                           <p className="font-medium text-sm">{deadline.title}</p>
-                          <p className="text-xs text-muted-foreground">{user?.name}</p>
+                          {deadline.description && (
+                            <p className="text-xs text-muted-foreground">{deadline.description}</p>
+                          )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium">{format(deadline.dueDate, 'dd MMM', { locale: es })}</p>
+                          <p className="text-sm font-medium">{format(dueDate, 'dd MMM yyyy', { locale: es })}</p>
                           <StatusBadge
                             variant={
-                              deadline.status === 'overdue' ? 'destructive' :
-                              deadline.status === 'urgent' ? 'warning' : 'muted'
+                              isOverdue ? 'destructive' :
+                              isUrgent ? 'warning' : 'muted'
                             }
                             className="text-xs"
                           >
-                            {deadline.status === 'overdue' ? 'Vencido' :
-                             deadline.status === 'urgent' ? 'Urgente' : 'Próximo'}
+                            {isOverdue ? 'Vencido' :
+                             isUrgent ? 'Urgente' : 'Próximo'}
                           </StatusBadge>
                         </div>
                       </div>
@@ -284,99 +369,99 @@ export default function CaseDetail() {
                   })}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Signature Tab */}
-        <TabsContent value="signature">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Flujos de firma</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {relatedSignatures.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <PenTool className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No hay flujos de firma</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {relatedSignatures.map(sig => {
-                    const mainSigner = getUserById(sig.mainSignerId);
-                    const altSigner = getUserById(sig.alternateSignerId);
-                    return (
-                      <div key={sig.id} className="p-4 rounded-lg border">
-                        <div className="flex items-center justify-between mb-3">
-                          <StatusBadge
-                            variant={
-                              sig.status === 'signed' ? 'success' :
-                              sig.status === 'rejected' ? 'destructive' : 'warning'
-                            }
-                          >
-                            {sig.status === 'signed' ? 'Firmado' :
-                             sig.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
-                          </StatusBadge>
-                          <span className="text-xs text-muted-foreground font-mono">v{sig.version}</span>
-                        </div>
-                        <div className="grid gap-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">Firmante principal:</span>
-                            <span className="font-medium">{mainSigner?.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">Alternativo:</span>
-                            <span className="font-medium">{altSigner?.name}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* History Tab */}
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Historial de actividad</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-0">
-                {relatedAudit.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No hay actividad registrada</p>
-                  </div>
-                ) : (
-                  relatedAudit.map((entry, index) => {
-                    const user = getUserById(entry.userId);
-                    return (
-                      <div key={entry.id} className="timeline-item">
-                        <div className="timeline-dot">
-                          <CheckCircle className="h-3 w-3" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{entry.action}</p>
-                          <p className="text-xs text-muted-foreground">{entry.details}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {user?.name} · {format(entry.timestamp, "d MMM yyyy 'a las' HH:mm", { locale: es })}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Document Dialog */}
+      <Dialog open={addDocDialogOpen} onOpenChange={setAddDocDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Agregar Documento al Expediente
+            </DialogTitle>
+            <DialogDescription>
+              Seleccione un documento existente para agregarlo a este expediente
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Expediente Info */}
+            <div className="bg-muted/50 p-3 rounded-lg">
+              <p className="text-sm font-medium">Expediente:</p>
+              <p className="text-sm text-muted-foreground">{expediente?.title}</p>
+              <p className="text-xs text-muted-foreground font-mono">{expediente?.code}</p>
+            </div>
+
+            {/* Search */}
+            <div className="space-y-2">
+              <Label htmlFor="doc-search">Buscar documento</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="doc-search"
+                  placeholder="Buscar por título o número..."
+                  value={docSearch}
+                  onChange={(e) => setDocSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Document Selector */}
+            <div className="space-y-2">
+              <Label htmlFor="document">Documento *</Label>
+              <Select value={selectedDocId} onValueChange={setSelectedDocId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar documento..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {filteredDocs.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No hay documentos disponibles
+                    </div>
+                  ) : (
+                    filteredDocs.map((doc: any) => (
+                      <SelectItem key={doc.id} value={doc.id}>
+                        <div className="flex flex-col py-1">
+                          <span className="font-medium">{doc.title}</span>
+                          <span className="text-xs text-muted-foreground">{doc.correlativeNumber}</span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Solo se muestran documentos que no están en este expediente
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAddDocDialogOpen(false);
+                setSelectedDocId('');
+                setDocSearch('');
+              }}
+              disabled={addDocMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAddDocument}
+              disabled={addDocMutation.isPending || !selectedDocId}
+            >
+              {addDocMutation.isPending ? 'Agregando...' : 'Agregar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

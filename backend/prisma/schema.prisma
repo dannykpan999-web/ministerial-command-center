@@ -46,12 +46,15 @@ model User {
   documentsCreated      Document[]           @relation("DocumentCreator")
   documentsResponsible  Document[]           @relation("DocumentResponsible")
   filesUploaded         DocumentFile[]
+  fileVersionsUploaded  FileVersion[]        @relation("FileVersionUploader")
   cloudConnections      CloudStorageConnection[]
   signatureFlows        SignatureFlow[]      @relation("FlowCreator")
   signatureParticipants SignatureParticipant[]
   auditLogs             AuditLog[]
   notifications         Notification[]
   comments              Comment[]
+  workflowStagesCompleted WorkflowStage[]
+  decreeAnnotations     DecreeAnnotation[]
 
   @@index([departmentId])
   @@index([email])
@@ -167,6 +170,45 @@ model Document {
   isDraft             Boolean     @default(false)
   qrCode              String?
 
+  // Workflow fields
+  currentStage          DocumentStage?
+  workflowConfigId      String?
+  workflowConfig        WorkflowConfiguration? @relation(fields: [workflowConfigId], references: [id], onDelete: SetNull)
+
+  // Manual entry stamp
+  manualEntryDate       DateTime?
+  manualEntryTime       String?
+  manualEntryStamp      String?
+
+  // Document numbering (top-left format)
+  documentNumber        String?      // 025-MT-038-051
+  documentReference     String?      // RP field
+  documentSection       String?      // Secc field
+
+  // Acknowledgment of receipt
+  acknowledgmentDate    DateTime?
+  acknowledgmentType    String?      // "MANUAL", "STAMP", "DIGITAL"
+  acknowledgmentFile    String?      // Scanned acknowledgment
+  acknowledgmentBy      String?
+
+  // Response tracking (for outgoing)
+  requiresResponse      Boolean      @default(false)
+  responseDeadline      DateTime?
+  responseReceived      Boolean      @default(false)
+  responseReceivedAt    DateTime?
+  remindersSent         Int          @default(0)
+  lastReminderSentAt    DateTime?
+
+  // Signature protocol
+  signedAt              DateTime?
+  signedBy              String?
+  physicalSealFile      String?      // Scanned seal image
+  sealAppliedAt         DateTime?
+
+  // Lifecycle completion
+  workflowCompleted     Boolean      @default(false)
+  workflowCompletedAt   DateTime?
+
   // Timestamps
   receivedAt          DateTime?
   sentAt              DateTime?
@@ -179,6 +221,9 @@ model Document {
   comments            Comment[]
   deadlines           Deadline[]
   signatureFlows      SignatureFlow[]
+  workflowStages      WorkflowStage[]
+  reminderLogs        ReminderLog[]
+  decreeAnnotations   DecreeAnnotation[]
 
   @@index([correlativeNumber])
   @@index([status])
@@ -188,6 +233,10 @@ model Document {
   @@index([responsibleId])
   @@index([expedienteId])
   @@index([createdAt])
+  @@index([currentStage])
+  @@index([workflowConfigId])
+  @@index([workflowCompleted])
+  @@index([responseDeadline])
   @@map("documents")
 }
 
@@ -238,14 +287,54 @@ model DocumentFile {
   version       Int         @default(1)
   hash          String?     // SHA-256 for integrity
 
+  // File type detection & security (Phase 1)
+  detectedMimeType  String?   @map("detected_mime_type")
+  declaredMimeType  String?   @map("declared_mime_type")
+  typeMismatch      Boolean   @default(false) @map("type_mismatch")
+  isSecure          Boolean   @default(true) @map("is_secure")
+  securityFlags     String[]  @default([]) @map("security_flags")
+
   uploadedById  String
   uploadedBy    User        @relation(fields: [uploadedById], references: [id])
 
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  versions      FileVersion[]
 
   @@index([documentId])
   @@index([uploadedById])
+  @@index([typeMismatch])
+  @@index([isSecure])
   @@map("document_files")
+}
+
+// Phase 3: File Version History
+model FileVersion {
+  id            String       @id @default(cuid())
+  fileId        String
+  file          DocumentFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  versionNumber Int          // Version number (1, 2, 3, etc.)
+  fileName      String       // Original filename at this version
+  fileSize      Int          // File size in bytes
+  mimeType      String
+  hash          String?      // SHA-256 hash for integrity
+
+  storagePath   String       // S3 key for this version
+  storageUrl    String?      // Presigned URL
+
+  comment       String?      @db.Text // Optional comment about changes
+
+  uploadedById  String
+  uploadedBy    User         @relation("FileVersionUploader", fields: [uploadedById], references: [id])
+
+  createdAt     DateTime     @default(now())
+
+  @@index([fileId])
+  @@index([versionNumber])
+  @@map("file_versions")
 }
 
 enum StorageType {
@@ -299,6 +388,7 @@ model Expediente {
   title           String
   description     String?     @db.Text
   status          ExpStatus   @default(OPEN)
+  priority        Priority    @default(MEDIUM)
 
   startDate       DateTime    @default(now())
   closedDate      DateTime?
@@ -312,6 +402,7 @@ model Expediente {
 
   @@index([code])
   @@index([status])
+  @@index([priority])
   @@map("expedientes")
 }
 
@@ -588,4 +679,155 @@ model Setting {
   updatedAt   DateTime  @updatedAt
 
   @@map("settings")
+}
+
+// ============================================
+// 15. DOCUMENT WORKFLOW SYSTEM
+// ============================================
+
+enum DocumentStage {
+  // Incoming document stages
+  MANUAL_ENTRY
+  SCANNING_ASSIGNED
+  AI_SUMMARY
+  DECREED
+  DECREE_PRINTED
+  REPORT_RECEIVED
+  RESPONSE_PREPARED
+  SIGNATURE_PROTOCOL
+  ACKNOWLEDGMENT
+  ARCHIVED
+
+  // Outgoing document stages
+  DRAFT_CREATION
+  PRINTED_SENT
+  AWAITING_RESPONSE
+  REMINDER_SENT
+  RESPONSE_RECEIVED
+}
+
+enum StageStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  FAILED
+}
+
+model WorkflowStage {
+  id              String          @id @default(cuid())
+  documentId      String
+  document        Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  stage           DocumentStage
+  status          StageStatus     @default(PENDING)
+
+  // Stage-specific data (JSONB for flexibility)
+  metadata        Json?
+
+  // Deadline tracking
+  dueDate         DateTime?
+  completedAt     DateTime?
+  completedBy     String?
+  completedByUser User?           @relation(fields: [completedBy], references: [id], onDelete: SetNull)
+
+  // Stage skip functionality
+  isSkipped       Boolean         @default(false)
+  skipReason      String?         @db.Text
+  skipApprovedBy  String?
+  skipApprovedAt  DateTime?
+
+  // Decree deadlines (configurable)
+  customDeadline  DateTime?
+  deadlineHours   Int?
+
+  // Notes and attachments
+  notes           String?         @db.Text
+  attachmentIds   String[]        @default([])
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([documentId])
+  @@index([stage])
+  @@index([status])
+  @@index([dueDate])
+  @@map("workflow_stages")
+}
+
+model WorkflowConfiguration {
+  id              String        @id @default(cuid())
+  name            String
+  documentType    String        // "INCOMING", "OUTGOING"
+
+  // Define which stages are required/optional/skipped
+  stages          Json          // Array of stage configurations
+
+  // Conditions for using this workflow
+  conditions      Json?
+
+  isDefault       Boolean       @default(false)
+  isActive        Boolean       @default(true)
+
+  // Relations
+  documents       Document[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([documentType])
+  @@index([isDefault])
+  @@map("workflow_configurations")
+}
+
+model ReminderLog {
+  id              String      @id @default(cuid())
+  documentId      String
+  document        Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  reminderType    String      // "DEADLINE", "RESPONSE", "DECREE"
+  recipientIds    String[]    @default([])
+
+  sentAt          DateTime    @default(now())
+  method          String      // "EMAIL", "NOTIFICATION", "DOCUMENT"
+
+  success         Boolean     @default(true)
+  errorMessage    String?     @db.Text
+
+  @@index([documentId])
+  @@index([sentAt])
+  @@map("reminder_logs")
+}
+
+// ============================================
+// DECREE ANNOTATIONS
+// ============================================
+
+model DecreeAnnotation {
+  id              String      @id @default(cuid())
+
+  // Relations
+  documentId      String
+  document        Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Annotation content
+  text            String      @db.Text
+  pageNumber      Int         @default(1)
+  yPosition       Int         @default(100)
+
+  // Author information (denormalized for history)
+  authorName      String
+  authorRole      String
+
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  editedAt        DateTime?
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([pageNumber])
+  @@map("decree_annotations")
 }

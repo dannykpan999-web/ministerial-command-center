@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,87 +34,89 @@ import {
   PenTool,
   AlertTriangle,
 } from 'lucide-react';
-import {
-  fetchExpedientes,
-  entities,
-  getEntityById,
-  getUserById,
-  Expediente,
-} from '@/lib/mockData';
+import { getExpedientes, ExpStatus } from '@/lib/api/expedientes.api';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const savedViews = [
-  { id: 'urgent', label: 'Urgentes', icon: AlertTriangle, filter: { priority: 'urgent' } },
-  { id: 'pending_sig', label: 'Pendientes de firma', icon: PenTool, filter: { status: 'pending_signature' } },
+  { id: 'open', label: 'Abiertos', icon: FolderOpen, filter: { status: ExpStatus.OPEN } },
+  { id: 'in_progress', label: 'En progreso', icon: AlertTriangle, filter: { status: ExpStatus.IN_PROGRESS } },
 ];
 
 export default function CasesPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [expedientes, setExpedientes] = useState<Expediente[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [entityFilter, setEntityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeView, setActiveView] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
-  useEffect(() => {
-    async function loadData() {
-      const data = await fetchExpedientes();
-      setExpedientes(data);
-      setLoading(false);
-    }
-    loadData();
-  }, []);
+  const debouncedSearch = useDebounce(search, 300);
 
-  const applyView = (viewId: string) => {
+  // Fetch expedientes with React Query
+  const { data, isLoading } = useQuery({
+    queryKey: ['expedientes', { page, search: debouncedSearch, status: statusFilter }],
+    queryFn: () => getExpedientes({
+      page,
+      limit,
+      search: debouncedSearch || undefined,
+      status: statusFilter !== 'all' ? (statusFilter as ExpStatus) : undefined,
+    }),
+  });
+
+  const expedientes = data?.data || [];
+  const totalPages = data?.meta?.totalPages || 1;
+
+  const applyView = useCallback((viewId: string) => {
     const view = savedViews.find(v => v.id === viewId);
     if (!view) {
       setActiveView(null);
       setStatusFilter('all');
+      setPage(1);
       return;
     }
     setActiveView(viewId);
     if (view.filter.status) setStatusFilter(view.filter.status);
-  };
+    setPage(1);
+  }, []);
 
-  const filteredExpedientes = expedientes.filter(exp => {
-    const matchesSearch = exp.title.toLowerCase().includes(search.toLowerCase()) ||
-                         exp.number.toLowerCase().includes(search.toLowerCase());
-    const matchesEntity = entityFilter === 'all' || exp.entityId === entityFilter;
-    const matchesStatus = statusFilter === 'all' || exp.status === statusFilter;
-    const matchesPriority = activeView === 'urgent' ? exp.priority === 'urgent' : true;
-    return matchesSearch && matchesEntity && matchesStatus && matchesPriority;
-  });
+  const handleSearch = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, []);
+
+  const handleStatusChange = useCallback((value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  }, []);
+
+  const handleNavigateToCase = useCallback((id: string) => {
+    navigate(`/cases/${id}`);
+  }, [navigate]);
+
+  const handlePreviousPage = useCallback(() => {
+    setPage(p => Math.max(1, p - 1));
+  }, []);
+
+  const handleNextPage = useCallback(() => {
+    setPage(p => Math.min(totalPages, p + 1));
+  }, [totalPages]);
 
   const statusLabels: Record<string, string> = {
-    open: 'Abierto',
-    pending_signature: 'Pendiente firma',
-    closed: 'Cerrado',
-    archived: 'Archivado',
+    [ExpStatus.OPEN]: 'Abierto',
+    [ExpStatus.IN_PROGRESS]: 'En Progreso',
+    [ExpStatus.CLOSED]: 'Cerrado',
+    [ExpStatus.ARCHIVED]: 'Archivado',
   };
 
   const statusVariants: Record<string, 'success' | 'warning' | 'info' | 'muted'> = {
-    open: 'info',
-    pending_signature: 'warning',
-    closed: 'success',
-    archived: 'muted',
-  };
-
-  const priorityLabels: Record<string, string> = {
-    low: 'Baja',
-    medium: 'Media',
-    high: 'Alta',
-    urgent: 'Urgente',
-  };
-
-  const priorityColors: Record<string, string> = {
-    low: 'bg-muted text-muted-foreground',
-    medium: 'bg-info/10 text-info',
-    high: 'bg-warning/10 text-warning',
-    urgent: 'bg-destructive/10 text-destructive',
+    [ExpStatus.OPEN]: 'info',
+    [ExpStatus.IN_PROGRESS]: 'warning',
+    [ExpStatus.CLOSED]: 'success',
+    [ExpStatus.ARCHIVED]: 'muted',
   };
 
   return (
@@ -151,42 +154,32 @@ export default function CasesPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t('common.search')}
+            placeholder="Buscar expedientes..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className="pl-9 h-10"
           />
         </div>
         <div className="grid grid-cols-2 sm:flex gap-2">
-          <Select value={entityFilter} onValueChange={setEntityFilter}>
-            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-48">
-              <SelectValue placeholder={t('inbox.all_entities')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
-              {entities.map(entity => (
-                <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={handleStatusChange}>
             <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-40">
-              <SelectValue placeholder={t('inbox.all_statuses')} />
+              <SelectValue placeholder="Todos los estados" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{t('inbox.all_statuses')}</SelectItem>
-              <SelectItem value="open">Abierto</SelectItem>
-              <SelectItem value="pending_signature">Pendiente firma</SelectItem>
-              <SelectItem value="closed">Cerrado</SelectItem>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value={ExpStatus.OPEN}>Abierto</SelectItem>
+              <SelectItem value={ExpStatus.IN_PROGRESS}>En Progreso</SelectItem>
+              <SelectItem value={ExpStatus.CLOSED}>Cerrado</SelectItem>
+              <SelectItem value={ExpStatus.ARCHIVED}>Archivado</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       {/* Content */}
-      {loading ? (
-        <DataTableSkeleton columns={6} rows={5} />
-      ) : filteredExpedientes.length === 0 ? (
+      {isLoading ? (
+        <DataTableSkeleton columns={5} rows={5} />
+      ) : expedientes.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
           title={t('empty.no_cases')}
@@ -200,60 +193,41 @@ export default function CasesPage() {
         <>
           {/* Mobile Cards */}
           <div className="md:hidden space-y-2">
-            {filteredExpedientes.map((exp) => {
-              const entity = getEntityById(exp.entityId);
-              const responsible = getUserById(exp.responsibleId);
-              return (
-                <div
-                  key={exp.id}
-                  className="relative bg-card rounded-xl border overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
-                  onClick={() => navigate(`/cases/${exp.id}`)}
-                >
-                  {/* Priority indicator */}
-                  <div className={cn(
-                    "absolute left-0 top-0 bottom-0 w-1",
-                    exp.priority === 'urgent' ? 'bg-destructive' :
-                    exp.priority === 'high' ? 'bg-warning' :
-                    exp.priority === 'medium' ? 'bg-info' : 'bg-muted'
-                  )} />
-
-                  <div className="p-3 pl-4">
-                    {/* Header row */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{exp.title}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{exp.number}</p>
-                      </div>
-                      <StatusBadge variant={statusVariants[exp.status]} className="text-[10px] shrink-0">
-                        {statusLabels[exp.status]}
-                      </StatusBadge>
+            {expedientes.map((exp) => (
+              <div
+                key={exp.id}
+                className="relative bg-card rounded-xl border overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                onClick={() => handleNavigateToCase(exp.id)}
+              >
+                <div className="p-3">
+                  {/* Header row */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{exp.title}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{exp.code}</p>
                     </div>
+                    <StatusBadge variant={statusVariants[exp.status]} className="text-[10px] shrink-0">
+                      {statusLabels[exp.status]}
+                    </StatusBadge>
+                  </div>
 
-                    {/* Entity row */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <div
-                        className="h-5 w-5 rounded text-[10px] font-semibold flex items-center justify-center text-primary-foreground shrink-0"
-                        style={{ backgroundColor: entity?.color }}
-                      >
-                        {entity?.code}
-                      </div>
-                      <span className="text-xs text-muted-foreground truncate">{entity?.name}</span>
-                    </div>
+                  {/* Description */}
+                  {exp.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                      {exp.description}
+                    </p>
+                  )}
 
-                    {/* Footer row */}
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="truncate">{responsible?.name}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', priorityColors[exp.priority])}>
-                          {priorityLabels[exp.priority]}
-                        </Badge>
-                        <span>{format(exp.updatedAt, 'dd MMM', { locale: es })}</span>
-                      </div>
-                    </div>
+                  {/* Footer row */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {exp._count?.documents || 0} doc{exp._count?.documents !== 1 ? 's' : ''}
+                    </span>
+                    <span>{format(new Date(exp.updatedAt), 'dd MMM', { locale: es })}</span>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           {/* Desktop Table */}
@@ -262,64 +236,77 @@ export default function CasesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Expediente</TableHead>
-                  <TableHead>Entidad</TableHead>
-                  <TableHead>Responsable</TableHead>
-                  <TableHead>Prioridad</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Documentos</TableHead>
+                  <TableHead>Plazos</TableHead>
                   <TableHead>Actualizado</TableHead>
                   <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredExpedientes.map((exp) => {
-                  const entity = getEntityById(exp.entityId);
-                  const responsible = getUserById(exp.responsibleId);
-                  return (
-                    <TableRow
-                      key={exp.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/cases/${exp.id}`)}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{exp.title}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{exp.number}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-6 w-6 rounded text-xs font-semibold flex items-center justify-center text-primary-foreground"
-                            style={{ backgroundColor: entity?.color }}
-                          >
-                            {entity?.code}
-                          </div>
-                          <span className="text-sm">{entity?.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{responsible?.name}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('text-xs', priorityColors[exp.priority])}>
-                          {priorityLabels[exp.priority]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {format(exp.updatedAt, 'dd MMM yyyy', { locale: es })}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge variant={statusVariants[exp.status]}>
-                          {statusLabels[exp.status]}
-                        </StatusBadge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {expedientes.map((exp) => (
+                  <TableRow
+                    key={exp.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleNavigateToCase(exp.id)}
+                  >
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{exp.title}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{exp.code}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground line-clamp-1">
+                        {exp.description || '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{exp._count?.documents || 0}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{exp._count?.deadlines || 0}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {format(new Date(exp.updatedAt), 'dd MMM yyyy', { locale: es })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge variant={statusVariants[exp.status]}>
+                        {statusLabels[exp.status]}
+                      </StatusBadge>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePreviousPage}
+                disabled={page === 1}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={page === totalPages}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

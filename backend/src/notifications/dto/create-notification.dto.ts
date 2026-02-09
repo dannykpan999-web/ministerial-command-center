@@ -14,8 +14,8 @@ export enum NotificationType {
 }
 
 export class CreateNotificationDto {
-  @ApiProperty({ description: 'User ID to send notification to' })
-  @IsUUID()
+  @ApiProperty({ description: 'User ID (CUID) to send notification to' })
+  @IsString()
   userId: string;
 
   @ApiProperty({ enum: NotificationType, description: 'Notification type' })

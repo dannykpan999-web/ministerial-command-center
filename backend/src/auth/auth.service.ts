@@ -208,7 +208,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 minutes in seconds
+      expiresIn: 28800, // 8 hours in seconds
     };
   }
 

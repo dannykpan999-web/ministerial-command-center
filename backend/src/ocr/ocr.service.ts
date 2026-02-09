@@ -2,10 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createWorker } from 'tesseract.js';
 import OpenAI from 'openai';
+import { PDFParse } from 'pdf-parse';
+import * as mammoth from 'mammoth';
+import { TextFormatterService } from './text-formatter.service';
 
 export interface OcrResult {
   text: string;
-  method: 'pdf-parse' | 'tesseract' | 'openai-vision';
+  method: 'pdf-parse' | 'tesseract' | 'openai-vision' | 'mammoth';
   confidence?: number;
   language?: string;
 }
@@ -16,7 +19,10 @@ export class OcrService {
   private openai: OpenAI | null = null;
   private enableAI: boolean;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private textFormatterService: TextFormatterService,
+  ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.enableAI = this.configService.get<boolean>('ENABLE_AI_FEATURES', false);
 
@@ -26,6 +32,55 @@ export class OcrService {
     } else {
       this.logger.log('Using free OCR only (pdf-parse + tesseract)');
     }
+  }
+
+  /**
+   * Clean and format extracted text
+   * Removes excessive blank lines, extra whitespace, and formats properly
+   * Also strips HTML tags that may come from OCR services
+   */
+  private cleanExtractedText(text: string): string {
+    if (!text) return '';
+
+    // Strip HTML tags (convert <p>, <br>, etc. to plain text)
+    // Replace <br> and <br/> with newlines
+    let cleaned = text.replace(/<br\s*\/?>/gi, '\n');
+
+    // Replace closing </p> tags with newlines
+    cleaned = cleaned.replace(/<\/p>/gi, '\n');
+
+    // Remove all other HTML tags
+    cleaned = cleaned.replace(/<[^>]+>/g, '');
+
+    // Decode HTML entities
+    cleaned = cleaned
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+    // Remove page break markers and form feed characters
+    cleaned = cleaned.replace(/\f/g, '\n');
+
+    // Remove excessive horizontal whitespace (more than 2 spaces)
+    cleaned = cleaned.replace(/[ \t]{3,}/g, '  ');
+
+    // Remove trailing whitespace from each line
+    cleaned = cleaned.split('\n').map(line => line.trimEnd()).join('\n');
+
+    // Remove excessive blank lines (more than 2 consecutive newlines)
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+
+    // Remove leading/trailing whitespace from the entire text
+    cleaned = cleaned.trim();
+
+    // Normalize line breaks (convert \r\n to \n)
+    cleaned = cleaned.replace(/\r\n/g, '\n');
+    cleaned = cleaned.replace(/\r/g, '\n');
+
+    return cleaned;
   }
 
   /**
@@ -47,22 +102,19 @@ export class OcrService {
 
       // Text files - direct read
       if (mimeType === 'text/plain') {
+        const plainText = file.buffer.toString('utf-8');
+        const cleanedText = this.cleanExtractedText(plainText);
         return {
-          text: file.buffer.toString('utf-8'),
+          text: cleanedText,
           method: 'pdf-parse',
         };
       }
 
-      // DOC/DOCX - use OpenAI if available, otherwise return empty
-      if (mimeType.includes('word') || mimeType.includes('document')) {
-        if (this.openai && this.enableAI) {
-          return await this.extractWithOpenAI(file);
-        }
-        this.logger.warn('DOC/DOCX OCR requires OpenAI. Returning empty text.');
-        return {
-          text: '',
-          method: 'pdf-parse',
-        };
+      // DOC/DOCX - use mammoth for .docx files
+      if (mimeType.includes('word') || mimeType.includes('document') ||
+          mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          mimeType === 'application/msword') {
+        return await this.extractFromDocx(file);
       }
 
       // Unsupported format
@@ -84,40 +136,80 @@ export class OcrService {
     try {
       this.logger.log(`Extracting PDF: ${file.originalname} (${file.size} bytes)`);
 
-      // Import pdf-parse
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const pdf = require('pdf-parse');
-      const data = await pdf(file.buffer);
+      // pdf-parse v2 uses class-based API with 'data' parameter
+      const parser = new PDFParse({ data: file.buffer });
+      const result = await parser.getText();
+      await parser.destroy(); // Clean up resources
 
-      this.logger.log(`PDF parsing complete. Pages: ${data.numpages}, Text length: ${data.text?.length || 0}`);
+      this.logger.log(`PDF parsing complete. Text length: ${result.text?.length || 0}`);
 
       // If pdf-parse succeeded and got text
-      if (data.text && data.text.trim().length > 0) {
-        this.logger.log(`PDF text extracted successfully (${data.text.length} chars)`);
+      if (result.text && result.text.trim().length > 0) {
+        const cleanedText = this.cleanExtractedText(result.text);
+        // Return plain text instead of HTML
+        this.logger.log(`PDF text extracted successfully (${cleanedText.length} chars, plain text)`);
         return {
-          text: data.text.trim(),
+          text: cleanedText,
           method: 'pdf-parse',
         };
       }
 
       // No text found - PDF might be scanned images
-      // Note: OpenAI Vision API doesn't support PDF files directly
-      // For scanned PDFs, user would need to upload images instead
       this.logger.warn('No text found in PDF (might be scanned images). Upload images for OCR instead.');
       return {
         text: '',
         method: 'pdf-parse',
       };
     } catch (error) {
-      this.logger.error(`PDF parsing failed: ${error.message}`);
+      this.logger.error(`PDF parsing failed: ${error.message || error}`);
       this.logger.error(`PDF error details: ${JSON.stringify(error)}`);
 
-      // Note: OpenAI Vision API doesn't support PDF files
       // Return empty text instead of throwing error
       this.logger.warn('PDF parsing failed. Returning empty text.');
       return {
         text: '',
         method: 'pdf-parse',
+      };
+    }
+  }
+
+  /**
+   * Extract text from Word documents (.doc/.docx) using mammoth
+   */
+  private async extractFromDocx(file: Express.Multer.File): Promise<OcrResult> {
+    try {
+      this.logger.log(`Extracting DOCX: ${file.originalname} (${file.size} bytes)`);
+
+      // Use mammoth to extract text from .docx files
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+
+      this.logger.log(`DOCX extraction complete. Text length: ${result.value?.length || 0}`);
+
+      if (result.value && result.value.trim().length > 0) {
+        const cleanedText = this.cleanExtractedText(result.value);
+        // Return plain text instead of HTML
+        this.logger.log(`DOCX text extracted successfully (plain text)`);
+        return {
+          text: cleanedText,
+          method: 'mammoth',
+        };
+      }
+
+      // No text found
+      this.logger.warn('No text found in DOCX file.');
+      return {
+        text: '',
+        method: 'mammoth',
+      };
+    } catch (error) {
+      this.logger.error(`DOCX extraction failed: ${error.message || error}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+
+      // Return empty text instead of throwing error
+      this.logger.warn('DOCX extraction failed. Returning empty text.');
+      return {
+        text: '',
+        method: 'mammoth',
       };
     }
   }
@@ -139,11 +231,13 @@ export class OcrService {
 
       // If tesseract got good results (confidence > 60%)
       if (data.confidence > 60 && data.text.trim().length > 0) {
+        const cleanedText = this.cleanExtractedText(data.text);
+        // Return plain text instead of HTML
         this.logger.log(
-          `Tesseract OCR successful (confidence: ${data.confidence.toFixed(2)}%)`,
+          `Tesseract OCR successful (confidence: ${data.confidence.toFixed(2)}%, plain text)`,
         );
         return {
-          text: data.text.trim(),
+          text: cleanedText,
           method: 'tesseract',
           confidence: data.confidence,
         };
@@ -158,9 +252,11 @@ export class OcrService {
       }
 
       // Return tesseract result anyway
-      this.logger.warn(`Returning low-confidence Tesseract result: ${data.text?.length || 0} chars`);
+      const cleanedText = this.cleanExtractedText(data.text);
+      // Return plain text instead of HTML
+      this.logger.warn(`Returning low-confidence Tesseract result (plain text)`);
       return {
-        text: data.text.trim(),
+        text: cleanedText,
         method: 'tesseract',
         confidence: data.confidence,
       };
@@ -214,13 +310,15 @@ export class OcrService {
       });
 
       const extractedText = response.choices[0]?.message?.content || '';
+      const cleanedText = this.cleanExtractedText(extractedText);
+      // Return plain text instead of HTML
 
       this.logger.log(
-        `OpenAI Vision OCR successful (${extractedText.length} chars)`,
+        `OpenAI Vision OCR successful (plain text)`,
       );
 
       return {
-        text: extractedText.trim(),
+        text: cleanedText,
         method: 'openai-vision',
       };
     } catch (error) {

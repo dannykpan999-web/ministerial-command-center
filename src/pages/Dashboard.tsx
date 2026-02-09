@@ -24,6 +24,7 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardStats, useInboxDocuments } from '@/hooks/useDocuments';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
+import { WorkflowStatisticsCard } from '@/components/workflow/WorkflowStatisticsCard';
 import { useEffect, useState } from 'react';
 
 export default function Dashboard() {
@@ -274,6 +275,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Workflow Statistics */}
+      <WorkflowStatisticsCard className="mt-6 sm:mt-8 animate-fade-in-up" style={{ animationDelay: '0.5s' } as any} />
 
       {/* Scroll to Top Button */}
       <ScrollToTop />

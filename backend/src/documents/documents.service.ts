@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { QrService } from './qr.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateDocumentDto, DocumentStatus } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { QueryDocumentDto } from './dto/query-document.dto';
@@ -30,6 +31,7 @@ export class DocumentsService {
     private auditService: AuditService,
     private notificationsService: NotificationsService,
     private qrService: QrService,
+    private storageService: StorageService,
   ) {}
 
   /**
@@ -506,12 +508,96 @@ export class DocumentsService {
   /**
    * Update document status
    */
-  async updateStatus(id: string, status: DocumentStatus) {
-    await this.findOne(id);
+  async updateStatus(
+    id: string,
+    status: DocumentStatus,
+    comment?: string,
+    userId?: string,
+  ) {
+    const existingDoc = await this.findOne(id);
 
     const document = await this.prisma.document.update({
       where: { id },
       data: { status },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        responsible: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Audit log with status change details
+    await this.auditService.log(userId || existingDoc.createdById, {
+      action: 'UPDATE_STATUS',
+      resourceType: 'document',
+      resourceId: id,
+      changes: {
+        oldStatus: existingDoc.status,
+        newStatus: status,
+        comment: comment || undefined,
+      },
+    });
+
+    return document;
+  }
+
+  /**
+   * Update document workflow stage
+   */
+  async updateStage(
+    id: string,
+    currentStage: string,
+    comment?: string,
+    userId?: string,
+  ) {
+    const existingDoc = await this.findOne(id);
+
+    const document = await this.prisma.document.update({
+      where: { id },
+      data: { currentStage: currentStage as any },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        responsible: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Audit log with stage change details
+    await this.auditService.log(userId || existingDoc.createdById, {
+      action: 'UPDATE_STAGE',
+      resourceType: 'document',
+      resourceId: id,
+      changes: {
+        oldStage: existingDoc.currentStage,
+        newStage: currentStage,
+        comment: comment || undefined,
+      },
     });
 
     return document;
@@ -538,6 +624,39 @@ export class DocumentsService {
     return {
       message: 'Document archived successfully',
       document,
+    };
+  }
+
+  /**
+   * Permanently delete document from database
+   * This is a hard delete - data cannot be recovered
+   */
+  async permanentDelete(id: string) {
+    const existingDoc = await this.findOne(id);
+
+    // Delete related data first
+    await this.prisma.documentFile.deleteMany({
+      where: { documentId: id },
+    });
+
+    await this.prisma.deadline.deleteMany({
+      where: { documentId: id },
+    });
+
+    // Delete the document
+    await this.prisma.document.delete({
+      where: { id },
+    });
+
+    // Audit log
+    await this.auditService.log(existingDoc.createdById, {
+      action: 'PERMANENT_DELETE_DOCUMENT',
+      resourceType: 'document',
+      resourceId: id,
+    });
+
+    return {
+      message: 'Document permanently deleted',
     };
   }
 
@@ -579,6 +698,16 @@ export class DocumentsService {
       resourceType: 'document',
       resourceId: id,
       changes: { assignedTo: assignDto.userId, note: assignDto.note },
+    });
+
+    // Send notification to assigned user
+    await this.notificationsService.create({
+      userId: assignDto.userId,
+      type: 'DOCUMENT_ASSIGNED' as any,
+      title: 'Documento Asignado',
+      message: `Se le ha asignado el documento: ${document.title}${assignDto.note ? `\n\nNota: ${assignDto.note}` : ''}`,
+      relatedId: id,
+      relatedType: 'document',
     });
 
     return {
@@ -923,5 +1052,135 @@ export class DocumentsService {
     );
 
     return createPaginatedResponse(enrichedDocuments, { total, page, limit });
+  }
+
+  /**
+   * Get file version history
+   */
+  async getFileVersions(fileId: string) {
+    // Check if file exists
+    const file = await this.prisma.documentFile.findUnique({
+      where: { id: fileId },
+      select: { id: true, version: true },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Get all versions
+    const versions = await this.prisma.fileVersion.findMany({
+      where: { fileId },
+      include: {
+        uploadedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { versionNumber: 'desc' },
+    });
+
+    return {
+      currentVersion: file.version,
+      totalVersions: versions.length,
+      versions,
+    };
+  }
+
+  /**
+   * Restore a previous file version
+   */
+  async restoreFileVersion(fileId: string, versionNumber: number, comment?: string) {
+    // Get the file
+    const file = await this.prisma.documentFile.findUnique({
+      where: { id: fileId },
+      include: { document: true },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Get the version to restore
+    const versionToRestore = await this.prisma.fileVersion.findFirst({
+      where: {
+        fileId,
+        versionNumber,
+      },
+    });
+
+    if (!versionToRestore) {
+      throw new NotFoundException(`Version ${versionNumber} not found`);
+    }
+
+    // Create a new version from the current file state before restoring
+    const newVersionNumber = file.version + 1;
+    await this.prisma.fileVersion.create({
+      data: {
+        fileId: file.id,
+        versionNumber: newVersionNumber,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        mimeType: file.mimeType,
+        hash: file.hash,
+        storagePath: file.storagePath,
+        storageUrl: file.storageUrl,
+        comment: comment || `Restored from version ${versionNumber}`,
+        uploadedById: file.document.createdById,
+      },
+    });
+
+    // Update the current file with the restored version data
+    await this.prisma.documentFile.update({
+      where: { id: fileId },
+      data: {
+        fileName: versionToRestore.fileName,
+        fileSize: versionToRestore.fileSize,
+        mimeType: versionToRestore.mimeType,
+        hash: versionToRestore.hash,
+        storagePath: versionToRestore.storagePath,
+        storageUrl: versionToRestore.storageUrl,
+        version: newVersionNumber,
+      },
+    });
+
+    return {
+      success: true,
+      message: `File restored to version ${versionNumber}`,
+      newVersion: newVersionNumber,
+    };
+  }
+
+  /**
+   * Download a specific file version
+   */
+  async downloadFileVersion(fileId: string, versionNumber: number) {
+    // Get the version
+    const version = await this.prisma.fileVersion.findFirst({
+      where: {
+        fileId,
+        versionNumber,
+      },
+    });
+
+    if (!version) {
+      throw new NotFoundException(`Version ${versionNumber} not found`);
+    }
+
+    // Generate signed URL for the version
+    const signedUrl = await this.storageService.getSignedUrl(version.storagePath);
+
+    return {
+      id: version.id,
+      fileName: version.fileName,
+      url: signedUrl,
+      mimeType: version.mimeType,
+      size: version.fileSize,
+      versionNumber: version.versionNumber,
+    };
   }
 }

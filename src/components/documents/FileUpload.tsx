@@ -2,6 +2,7 @@ import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Upload,
   X,
@@ -12,10 +13,18 @@ import {
   Download,
   Eye,
   FileCheck,
+  Shield,
+  AlertCircle,
+  History,
+  RefreshCw,
+  Replace,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { documentsApi } from '@/lib/api/documents.api';
+import { FileConversionDialog } from './FileConversionDialog';
+import { FileVersionHistory } from './FileVersionHistory';
+import { FileReplaceDialog } from './FileReplaceDialog';
 
 interface UploadedFile {
   id: string;
@@ -61,6 +70,12 @@ export function FileUpload({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dialog states for file operations
+  const [conversionDialogOpen, setConversionDialogOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
 
   const getFileIcon = (fileType: string) => {
     if (fileType.startsWith('image/')) return ImageIcon;
@@ -167,7 +182,19 @@ export function FileUpload({
         );
       } catch (error: any) {
         console.error('Error uploading files:', error);
-        toast.error(error.response?.data?.message || 'Error al subir archivos');
+
+        const errorMessage = error.response?.data?.message || 'Error al subir archivos';
+
+        // Check if it's a security rejection
+        if (errorMessage.includes('security') || errorMessage.includes('seguridad') || errorMessage.includes('rejected')) {
+          toast.error(errorMessage, {
+            description: 'Este tipo de archivo no está permitido por razones de seguridad.',
+            duration: 5000,
+            icon: <AlertCircle className="h-5 w-5 text-red-600" />,
+          });
+        } else {
+          toast.error(errorMessage);
+        }
 
         // Remove failed files
         setFiles((prev) =>
@@ -264,6 +291,18 @@ export function FileUpload({
 
   return (
     <div className="space-y-4">
+      {/* Security Notice */}
+      {uploadImmediately && (
+        <Alert className="border-blue-200 bg-blue-50/50">
+          <Shield className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-sm text-blue-900">
+            <strong>Protección de seguridad activa:</strong> Todos los archivos son
+            escaneados automáticamente. Los tipos peligrosos (.exe, scripts) serán
+            rechazados para proteger el sistema.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Drop Zone */}
       <div
         onDragOver={handleDragOver}
@@ -359,7 +398,21 @@ export function FileUpload({
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => window.open(file.url, '_blank')}
+                              onClick={async () => {
+                                try {
+                                  const blob = await documentsApi.downloadFile(file.id);
+                                  if (blob) {
+                                    const url = window.URL.createObjectURL(blob);
+                                    window.open(url, '_blank');
+                                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                  } else {
+                                    toast.error('Error al abrir archivo');
+                                  }
+                                } catch (error) {
+                                  console.error('Error opening file:', error);
+                                  toast.error('Error al abrir archivo');
+                                }
+                              }}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -367,15 +420,68 @@ export function FileUpload({
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => {
-                                const link = document.createElement('a');
-                                link.href = file.url!;
-                                link.download = file.name;
-                                link.click();
+                              onClick={async () => {
+                                try {
+                                  const blob = await documentsApi.downloadFile(file.id);
+                                  if (blob) {
+                                    const blobUrl = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = blobUrl;
+                                    link.download = file.fileName || file.name || 'download';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(blobUrl);
+                                    toast.success('Archivo descargado correctamente');
+                                  } else {
+                                    toast.error('Error al descargar archivo');
+                                  }
+                                } catch (error) {
+                                  console.error('Error downloading file:', error);
+                                  toast.error('Error al descargar archivo');
+                                }
                               }}
                             >
                               <Download className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setSelectedFile(file);
+                                setConversionDialogOpen(true);
+                              }}
+                              title="Convertir archivo"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setSelectedFile(file);
+                                setVersionHistoryOpen(true);
+                              }}
+                              title="Historial de versiones"
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                            {documentId && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => {
+                                  setSelectedFile(file);
+                                  setReplaceDialogOpen(true);
+                                }}
+                                title="Reemplazar archivo"
+                              >
+                                <Replace className="h-4 w-4" />
+                              </Button>
+                            )}
                           </>
                         )}
                         <Button
@@ -395,6 +501,46 @@ export function FileUpload({
             })}
           </div>
         </div>
+      )}
+
+      {/* File Conversion Dialog */}
+      {selectedFile && (
+        <FileConversionDialog
+          open={conversionDialogOpen}
+          onOpenChange={setConversionDialogOpen}
+          fileId={selectedFile.id}
+          fileName={selectedFile.name}
+          mimeType={selectedFile.type}
+        />
+      )}
+
+      {/* File Version History Dialog */}
+      {selectedFile && (
+        <FileVersionHistory
+          open={versionHistoryOpen}
+          onOpenChange={setVersionHistoryOpen}
+          fileId={selectedFile.id}
+          fileName={selectedFile.name}
+          onVersionRestored={() => {
+            // Refresh file list or show notification
+            toast.success('Versión restaurada. Recarga la página para ver los cambios.');
+          }}
+        />
+      )}
+
+      {/* File Replace Dialog */}
+      {selectedFile && documentId && (
+        <FileReplaceDialog
+          open={replaceDialogOpen}
+          onOpenChange={setReplaceDialogOpen}
+          documentId={documentId}
+          fileId={selectedFile.id}
+          fileName={selectedFile.name}
+          onReplaced={() => {
+            // Reload page to show updated file
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );

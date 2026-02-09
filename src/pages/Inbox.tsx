@@ -70,13 +70,27 @@ import {
   Trash2,
   Download,
   Printer,
+  Archive,
+  RefreshCw,
+  Stamp,
+  CheckCircle,
 } from 'lucide-react';
 import { entities, entityTypeLabels } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
+import { DocumentDetailSheet } from '@/components/documents/DocumentDetailSheet';
 import { EditDocumentDialog } from '@/components/documents/EditDocumentDialog';
-import { useInboxDocuments, useArchiveDocument } from '@/hooks/useDocuments';
+import { AssignDialog } from '@/components/documents/AssignDialog';
+import { DeadlineDialog } from '@/components/documents/DeadlineDialog';
+import { SignatureDialog } from '@/components/documents/SignatureDialog';
+import { StatusChangeDialog } from '@/components/documents/StatusChangeDialog';
+import { AssignExpedienteDialog } from '@/components/documents/AssignExpedienteDialog';
+import { ManualEntryStampDialog } from '@/components/documents/ManualEntryStampDialog';
+import { AcknowledgmentDialog } from '@/components/documents/AcknowledgmentDialog';
+import { SignatureProtocolDialog } from '@/components/documents/SignatureProtocolDialog';
+import { DocumentStageProgress } from '@/components/workflow/DocumentStageProgress';
+import { useInboxDocuments, useArchiveDocument, useDeleteDocument, useDecreeDocument } from '@/hooks/useDocuments';
 import { documentsApi } from '@/lib/api/documents.api';
 import { entitiesApi, EntityType } from '@/lib/api/entities.api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -93,12 +107,23 @@ export default function InboxPage() {
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [classificationFilter, setClassificationFilter] = useState<string>('all');
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [decreeDialogOpen, setDecreeDialogOpen] = useState(false);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [assignExpedienteDialogOpen, setAssignExpedienteDialogOpen] = useState(false);
+  const [manualEntryStampDialogOpen, setManualEntryStampDialogOpen] = useState(false);
+  const [acknowledgmentDialogOpen, setAcknowledgmentDialogOpen] = useState(false);
+  const [signatureProtocolDialogOpen, setSignatureProtocolDialogOpen] = useState(false);
 
   // Fetch all entities for filtering
   const { data: allEntities = [] } = useQuery({
@@ -123,13 +148,14 @@ export default function InboxPage() {
     search: debouncedSearch || undefined,
     entityId: entityFilter !== 'all' ? entityFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
+    priority: priorityFilter !== 'all' ? priorityFilter : undefined,
     classification: classificationFilter !== 'all' ? classificationFilter : undefined,
-  }), [currentPage, pageSize, debouncedSearch, entityFilter, statusFilter, classificationFilter]);
+  }), [currentPage, pageSize, debouncedSearch, entityFilter, statusFilter, priorityFilter, classificationFilter]);
 
   // Reset to first page when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, entityFilter, statusFilter, classificationFilter, entityTypeFilter]);
+  }, [debouncedSearch, entityFilter, statusFilter, priorityFilter, classificationFilter, entityTypeFilter]);
 
   // Reset entity type filter when switching to Internal classification
   useMemo(() => {
@@ -140,10 +166,16 @@ export default function InboxPage() {
   }, [classificationFilter]);
 
   // Fetch inbox documents with real API
-  const { data: inboxData, isLoading: loading } = useInboxDocuments(queryParams);
+  const { data: inboxData, isLoading: loading, refetch } = useInboxDocuments(queryParams);
 
   // Archive document mutation
   const archiveDocument = useArchiveDocument();
+
+  // Delete document mutation (permanent)
+  const deleteDocument = useDeleteDocument();
+
+  // Decree document mutation
+  const decreeDocument = useDecreeDocument();
 
   const documents = inboxData?.data || [];
   const filteredDocs = documents; // Already filtered by API
@@ -160,7 +192,28 @@ export default function InboxPage() {
 
   const handleEdit = (doc: any) => {
     setSelectedDocument(doc);
+    setDetailSheetOpen(true);
+  };
+
+  const handleOpenEditDialog = (doc: any) => {
+    setSelectedDocument(doc);
     setEditDialogOpen(true);
+  };
+
+  const handleArchive = (doc: any) => {
+    setSelectedDocument(doc);
+    setArchiveDialogOpen(true);
+  };
+
+  const confirmArchive = () => {
+    if (selectedDocument) {
+      archiveDocument.mutate(selectedDocument.id, {
+        onSuccess: () => {
+          setArchiveDialogOpen(false);
+          setSelectedDocument(null);
+        },
+      });
+    }
   };
 
   const handleDelete = (doc: any) => {
@@ -170,13 +223,64 @@ export default function InboxPage() {
 
   const confirmDelete = () => {
     if (selectedDocument) {
-      archiveDocument.mutate(selectedDocument.id, {
+      deleteDocument.mutate(selectedDocument.id, {
         onSuccess: () => {
           setDeleteDialogOpen(false);
           setSelectedDocument(null);
+          refetch(); // Refresh the document list
         },
       });
     }
+  };
+
+  const handleOpenCase = (doc: any) => {
+    // Navigate to case detail page if expedienteId exists
+    if (doc.expedienteId) {
+      navigate(`/cases/${doc.expedienteId}`);
+    } else {
+      // Navigate to cases page to create a new case
+      navigate('/cases/new', { state: { documentId: doc.id, documentTitle: doc.title } });
+    }
+  };
+
+  const handleAssign = (doc: any) => {
+    setSelectedDocument(doc);
+    setAssignDialogOpen(true);
+  };
+
+  const handleCreateDeadline = (doc: any) => {
+    setSelectedDocument(doc);
+    setDeadlineDialogOpen(true);
+  };
+
+  const handleSendToSignature = (doc: any) => {
+    setSelectedDocument(doc);
+    setSignatureDialogOpen(true);
+  };
+
+  const handleChangeStatus = (doc: any) => {
+    setSelectedDocument(doc);
+    setStatusDialogOpen(true);
+  };
+
+  const handleManualEntryStamp = (doc: any) => {
+    setSelectedDocument(doc);
+    setManualEntryStampDialogOpen(true);
+  };
+
+  const handleAcknowledgment = (doc: any) => {
+    setSelectedDocument(doc);
+    setAcknowledgmentDialogOpen(true);
+  };
+
+  const handleSignatureProtocol = (doc: any) => {
+    setSelectedDocument(doc);
+    setSignatureProtocolDialogOpen(true);
+  };
+
+  const handleAssignExpediente = (doc: any) => {
+    setSelectedDocument(doc);
+    setAssignExpedienteDialogOpen(true);
   };
 
   const handleDownloadPdf = async (doc: any) => {
@@ -251,6 +355,24 @@ export default function InboxPage() {
     } catch (error) {
       toast.dismiss();
       toast.error('Error al descargar algunos documentos');
+    }
+  };
+
+  const handleBulkAssign = () => {
+    if (selectedIds.length === 0) return;
+
+    if (selectedIds.length === 1) {
+      // If only one document selected, open the assign dialog
+      const doc = filteredDocs.find((d: any) => d.id === selectedIds[0]);
+      if (doc) {
+        handleAssign(doc);
+      }
+    } else {
+      // For multiple documents, show info message
+      toast.info('Asignación múltiple', {
+        description: 'Por favor, seleccione un documento a la vez para asignar responsable.',
+        duration: 4000,
+      });
     }
   };
 
@@ -414,6 +536,18 @@ export default function InboxPage() {
               <SelectItem value="ARCHIVED">Archivado</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="h-10 text-xs sm:text-sm sm:w-36">
+              <SelectValue placeholder="Prioridad" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="URGENT">🔴 Urgente</SelectItem>
+              <SelectItem value="HIGH">🟠 Alta</SelectItem>
+              <SelectItem value="MEDIUM">🟡 Media</SelectItem>
+              <SelectItem value="LOW">🟢 Baja</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Embassy Filter - Only show for External classification */}
@@ -474,7 +608,7 @@ export default function InboxPage() {
               <span className="hidden sm:inline">Descargar PDFs</span>
               <span className="sm:hidden">PDFs</span>
             </Button>
-            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
+            <Button variant="outline" size="sm" onClick={handleBulkAssign} className="flex-1 sm:flex-none">
               <UserPlus className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Asignar</span>
               <span className="sm:hidden">Asignar</span>
@@ -483,9 +617,9 @@ export default function InboxPage() {
               variant="outline"
               size="sm"
               onClick={handleBulkArchive}
-              className="flex-1 sm:flex-none text-red-600 hover:text-red-700"
+              className="flex-1 sm:flex-none"
             >
-              <Trash2 className="h-4 w-4 mr-1" />
+              <Archive className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Archivar</span>
               <span className="sm:hidden">Archivar</span>
             </Button>
@@ -542,8 +676,15 @@ export default function InboxPage() {
                   return (
                     <TableRow
                       key={doc.id}
-                      className="group transition-colors hover:bg-muted/50"
+                      className="group transition-colors hover:bg-muted/50 cursor-pointer"
                       style={{ animationDelay: `${index * 0.03}s` }}
+                      onClick={(e) => {
+                        // Don't trigger if clicking checkbox or dropdown button
+                        if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('[role="checkbox"]')) {
+                          return;
+                        }
+                        handleEdit(doc);
+                      }}
                     >
                       <TableCell>
                         <Checkbox
@@ -552,9 +693,17 @@ export default function InboxPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="font-medium">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="font-medium">{doc.title}</p>
+                            <p className="text-xs text-muted-foreground">{doc.correlativeNumber}</p>
+                          </div>
+                          <DocumentStageProgress
+                            direction={doc.direction}
+                            currentStage={doc.currentStage}
+                            size="sm"
+                            showIcon={false}
+                          />
                         </div>
                       </TableCell>
                       <TableCell>
@@ -606,21 +755,50 @@ export default function InboxPage() {
                               Decretar documento
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenCase(doc)}>
                               <FolderOpen className="h-4 w-4 mr-2" />
                               Abrir expediente
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleAssignExpediente(doc)}>
+                              <FolderOpen className="h-4 w-4 mr-2 text-blue-600" />
+                              Asignar a expediente
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleAssign(doc)}>
                               <UserPlus className="h-4 w-4 mr-2" />
                               Asignar responsable
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateDeadline(doc)}>
                               <Clock className="h-4 w-4 mr-2" />
-                              Crear plazo
+                              Establecer Plazo
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendToSignature(doc)}>
                               <PenTool className="h-4 w-4 mr-2" />
                               Enviar a firma
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {/* Phase 3 Workflow Actions */}
+                            {doc.direction === 'IN' && doc.currentStage === 'MANUAL_ENTRY' && (
+                              <DropdownMenuItem onClick={() => handleManualEntryStamp(doc)}>
+                                <Stamp className="h-4 w-4 mr-2 text-purple-600" />
+                                Sello de entrada
+                              </DropdownMenuItem>
+                            )}
+                            {doc.currentStage === 'SIGNATURE_PROTOCOL' && (
+                              <DropdownMenuItem onClick={() => handleSignatureProtocol(doc)}>
+                                <PenTool className="h-4 w-4 mr-2 text-green-600" />
+                                Protocolo de firma
+                              </DropdownMenuItem>
+                            )}
+                            {doc.direction === 'IN' && doc.currentStage === 'ACKNOWLEDGMENT' && !doc.acknowledgmentDate && (
+                              <DropdownMenuItem onClick={() => handleAcknowledgment(doc)}>
+                                <CheckCircle className="h-4 w-4 mr-2 text-blue-600" />
+                                Generar Acuse
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleChangeStatus(doc)}>
+                              <RefreshCw className="h-4 w-4 mr-2 text-blue-600" />
+                              Cambiar estado
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleDownloadPdf(doc)}>
@@ -632,13 +810,27 @@ export default function InboxPage() {
                               Imprimir
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleEdit(doc)}>
+                            <DropdownMenuItem
+                              onClick={() => handleEdit(doc)}
+                              disabled={doc.status === 'ARCHIVED'}
+                            >
                               <Edit className="h-4 w-4 mr-2" />
-                              Editar
+                              Editar {doc.status === 'ARCHIVED' && '(Solo lectura)'}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(doc)} className="text-red-600">
-                              <Trash2 className="h-4 w-4 mr-2" />
+                            <DropdownMenuItem
+                              onClick={() => handleArchive(doc)}
+                              disabled={doc.status === 'ARCHIVED'}
+                            >
+                              <Archive className="h-4 w-4 mr-2 text-blue-600" />
                               Archivar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(doc)}
+                              className="text-destructive focus:text-destructive"
+                              disabled={doc.status === 'ARCHIVED'}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Eliminar {doc.status === 'ARCHIVED' && '(Protegido)'}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -727,9 +919,20 @@ export default function InboxPage() {
                               <Building2 className="h-2.5 w-2.5 mr-0.5" />{doc.decretedTo.length}
                             </Badge>
                           )}
+                        </div>
 
-                          {/* Quick actions - inline */}
-                          <div className="ml-auto flex items-center gap-1">
+                        {/* Progress indicator */}
+                        <div className="mt-2">
+                          <DocumentStageProgress
+                            direction={doc.direction}
+                            currentStage={doc.currentStage}
+                            size="sm"
+                            showIcon={false}
+                          />
+                        </div>
+
+                        {/* Quick actions - inline */}
+                        <div className="flex items-center justify-end gap-1 mt-2">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -762,13 +965,45 @@ export default function InboxPage() {
                                   Decretar
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="py-2 text-xs">
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleOpenCase(doc)}>
                                   <FolderOpen className="h-3.5 w-3.5 mr-2" />
                                   Expediente
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="py-2 text-xs">
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleAssign(doc)}>
                                   <UserPlus className="h-3.5 w-3.5 mr-2" />
                                   Asignar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleCreateDeadline(doc)}>
+                                  <Clock className="h-3.5 w-3.5 mr-2" />
+                                  Establecer Plazo
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleSendToSignature(doc)}>
+                                  <PenTool className="h-3.5 w-3.5 mr-2" />
+                                  Firma
+                                </DropdownMenuItem>
+                                {/* Phase 3 Workflow Actions */}
+                                {doc.direction === 'IN' && doc.currentStage === 'MANUAL_ENTRY' && (
+                                  <DropdownMenuItem className="py-2 text-xs" onClick={() => handleManualEntryStamp(doc)}>
+                                    <Stamp className="h-3.5 w-3.5 mr-2 text-purple-600" />
+                                    Sello entrada
+                                  </DropdownMenuItem>
+                                )}
+                                {doc.currentStage === 'SIGNATURE_PROTOCOL' && (
+                                  <DropdownMenuItem className="py-2 text-xs" onClick={() => handleSignatureProtocol(doc)}>
+                                    <PenTool className="h-3.5 w-3.5 mr-2 text-green-600" />
+                                    Protocolo firma
+                                  </DropdownMenuItem>
+                                )}
+                                {doc.direction === 'IN' && doc.currentStage === 'ACKNOWLEDGMENT' && !doc.acknowledgmentDate && (
+                                  <DropdownMenuItem className="py-2 text-xs" onClick={() => handleAcknowledgment(doc)}>
+                                    <CheckCircle className="h-3.5 w-3.5 mr-2 text-blue-600" />
+                                    Generar Acuse
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleChangeStatus(doc)}>
+                                  <RefreshCw className="h-3.5 w-3.5 mr-2 text-blue-600" />
+                                  Estado
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="py-2 text-xs" onClick={() => handleDownloadPdf(doc)}>
@@ -780,18 +1015,33 @@ export default function InboxPage() {
                                   Imprimir
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleEdit(doc)}>
+                                <DropdownMenuItem
+                                  className="py-2 text-xs"
+                                  onClick={() => handleEdit(doc)}
+                                  disabled={doc.status === 'ARCHIVED'}
+                                >
                                   <Edit className="h-3.5 w-3.5 mr-2" />
-                                  Editar
+                                  Editar {doc.status === 'ARCHIVED' && '(Solo lectura)'}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="py-2 text-xs text-red-600" onClick={() => handleDelete(doc)}>
-                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                <DropdownMenuItem
+                                  className="py-2 text-xs"
+                                  onClick={() => handleArchive(doc)}
+                                  disabled={doc.status === 'ARCHIVED'}
+                                >
+                                  <Archive className="h-3.5 w-3.5 mr-2 text-blue-600" />
                                   Archivar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="py-2 text-xs text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(doc)}
+                                  disabled={doc.status === 'ARCHIVED'}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Eliminar {doc.status === 'ARCHIVED' && '(Protegido)'}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -803,13 +1053,13 @@ export default function InboxPage() {
       )}
 
       {/* Pagination */}
-      {!loading && filteredDocs.length > 0 && inboxData?.meta && (
+      {!loading && filteredDocs.length > 0 && (
         <div className="mt-6">
           <TablePagination
             currentPage={currentPage}
-            totalPages={inboxData.meta.totalPages || 1}
+            totalPages={inboxData?.totalPages || 1}
             pageSize={pageSize}
-            totalItems={inboxData.meta.total || filteredDocs.length}
+            totalItems={inboxData?.total || filteredDocs.length}
             onPageChange={setCurrentPage}
             onPageSizeChange={setPageSize}
           />
@@ -845,10 +1095,28 @@ export default function InboxPage() {
           open={decreeDialogOpen}
           onOpenChange={setDecreeDialogOpen}
           document={selectedDocument}
-          onDecree={(deptIds) => {
-            console.log('Decreted to departments:', deptIds);
-            setDecreeDialogOpen(false);
+          onDecree={(decreeData) => {
+            decreeDocument.mutate(
+              { id: selectedDocument.id, data: decreeData },
+              {
+                onSuccess: () => {
+                  setDecreeDialogOpen(false);
+                  setSelectedDocument(null);
+                  refetch(); // Refresh the document list
+                },
+              }
+            );
           }}
+        />
+      )}
+
+      {/* Document Detail Sheet */}
+      {selectedDocument && (
+        <DocumentDetailSheet
+          open={detailSheetOpen}
+          onOpenChange={setDetailSheetOpen}
+          documentId={selectedDocument.id}
+          onEdit={handleOpenEditDialog}
         />
       )}
 
@@ -861,8 +1129,82 @@ export default function InboxPage() {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* Assign Dialog */}
+      {selectedDocument && (
+        <AssignDialog
+          open={assignDialogOpen}
+          onOpenChange={setAssignDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Deadline Dialog */}
+      {selectedDocument && (
+        <DeadlineDialog
+          open={deadlineDialogOpen}
+          onOpenChange={setDeadlineDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Signature Dialog */}
+      {selectedDocument && (
+        <SignatureDialog
+          open={signatureDialogOpen}
+          onOpenChange={setSignatureDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Status Change Dialog */}
+      {selectedDocument && (
+        <StatusChangeDialog
+          open={statusDialogOpen}
+          onOpenChange={setStatusDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Assign Expediente Dialog */}
+      {selectedDocument && (
+        <AssignExpedienteDialog
+          open={assignExpedienteDialogOpen}
+          onOpenChange={setAssignExpedienteDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Phase 3 Workflow Dialogs */}
+      {/* Manual Entry Stamp Dialog */}
+      {selectedDocument && (
+        <ManualEntryStampDialog
+          open={manualEntryStampDialogOpen}
+          onOpenChange={setManualEntryStampDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Acknowledgment Dialog */}
+      {selectedDocument && (
+        <AcknowledgmentDialog
+          open={acknowledgmentDialogOpen}
+          onOpenChange={setAcknowledgmentDialogOpen}
+          document={selectedDocument}
+        />
+      )}
+
+      {/* Signature Protocol Dialog */}
+      {selectedDocument && (
+        <SignatureProtocolDialog
+          open={signatureProtocolDialogOpen}
+          onOpenChange={setSignatureProtocolDialogOpen}
+          document={selectedDocument}
+          mode="signature"
+        />
+      )}
+
+      {/* Archive Confirmation Dialog */}
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Archivar documento?</AlertDialogTitle>
@@ -885,11 +1227,49 @@ export default function InboxPage() {
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
+              onClick={confirmArchive}
+              className="bg-blue-600 hover:bg-blue-700"
               disabled={archiveDocument.isPending}
             >
               {archiveDocument.isPending ? 'Archivando...' : 'Archivar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">⚠️ ¿Eliminar documento permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedDocument && (
+                <>
+                  <span className="font-semibold">Esta acción no se puede deshacer.</span>
+                  <br /><br />
+                  ¿Está seguro de que desea eliminar permanentemente el documento "{selectedDocument.title}"?
+                  <br />
+                  <span className="text-xs text-muted-foreground">
+                    Número: {selectedDocument.correlativeNumber}
+                  </span>
+                  <br /><br />
+                  <span className="text-destructive text-sm">
+                    El documento será eliminado completamente del sistema.
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteDocument.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteDocument.isPending}
+            >
+              {deleteDocument.isPending ? 'Eliminando...' : 'Eliminar Permanentemente'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

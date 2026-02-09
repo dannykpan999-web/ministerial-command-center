@@ -81,8 +81,7 @@ export const useCreateDocument = () => {
   return useMutation({
     mutationFn: (data: CreateDocumentDto) => documentsApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: documentKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: documentKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.all });
       toast.success('Documento creado exitosamente');
     },
     onError: (error: any) => {
@@ -158,6 +157,23 @@ export const useArchiveDocument = () => {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al archivar documento');
+    },
+  });
+};
+
+// Permanent delete document mutation
+export const useDeleteDocument = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentsApi.permanentDelete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: documentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.stats() });
+      toast.success('Documento eliminado permanentemente');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Error al eliminar documento');
     },
   });
 };

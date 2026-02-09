@@ -6,6 +6,7 @@ import {
 import { entitiesApi } from '@/lib/api/entities.api';
 import { usersApi } from '@/lib/api/users.api';
 import { useUpdateDocument } from '@/hooks/useDocuments';
+import { Archive } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   Select,
   SelectContent,
@@ -74,6 +75,12 @@ export function EditDocumentDialog({ open, onOpenChange, document }: EditDocumen
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Check if document is archived
+    if (document.status === 'ARCHIVED') {
+      toast.error('No se pueden editar documentos archivados. Los documentos archivados son de solo lectura.');
+      return;
+    }
+
     // Validation
     if (!formData.title) {
       toast.error('Por favor ingrese el título del documento');
@@ -112,6 +119,19 @@ export function EditDocumentDialog({ open, onOpenChange, document }: EditDocumen
             Actualice los datos del documento #{document.correlativeNumber}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Archived Warning Banner */}
+        {document.status === 'ARCHIVED' && (
+          <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
+            <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 flex items-center gap-2">
+              <Archive className="h-4 w-4" />
+              ⚠️ Documento Archivado - Solo Lectura
+            </p>
+            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+              Los documentos archivados no pueden ser modificados. Este formulario es solo para visualización.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -233,12 +253,11 @@ export function EditDocumentDialog({ open, onOpenChange, document }: EditDocumen
             {/* Content */}
             <div className="space-y-2 col-span-2">
               <Label htmlFor="content">Contenido</Label>
-              <Textarea
-                id="content"
+              <RichTextEditor
+                value={formData.content || ''}
+                onChange={(value) => setFormData({ ...formData, content: value })}
                 placeholder="Contenido del documento..."
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                rows={6}
+                minHeight="250px"
               />
             </div>
           </div>
@@ -252,8 +271,11 @@ export function EditDocumentDialog({ open, onOpenChange, document }: EditDocumen
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={updateDocument.isPending}>
-              {updateDocument.isPending ? 'Guardando...' : 'Guardar Cambios'}
+            <Button
+              type="submit"
+              disabled={updateDocument.isPending || document.status === 'ARCHIVED'}
+            >
+              {updateDocument.isPending ? 'Guardando...' : document.status === 'ARCHIVED' ? 'Solo Lectura' : 'Guardar Cambios'}
             </Button>
           </DialogFooter>
         </form>

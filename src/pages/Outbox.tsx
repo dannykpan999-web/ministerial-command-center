@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { DataTableSkeleton } from '@/components/ui/data-table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Checkbox } from '@/components/ui/checkbox';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Table,
@@ -42,11 +43,15 @@ import {
   Eye,
   Edit,
   Trash2,
+  Archive,
   Download,
   Printer,
+  UserPlus,
 } from 'lucide-react';
+import { DocumentDetailSheet } from '@/components/documents/DocumentDetailSheet';
 import { EditDocumentDialog } from '@/components/documents/EditDocumentDialog';
-import { useOutboxDocuments, useArchiveDocument } from '@/hooks/useDocuments';
+import { AssignDialog } from '@/components/documents/AssignDialog';
+import { useOutboxDocuments, useArchiveDocument, useDeleteDocument } from '@/hooks/useDocuments';
 import { entitiesApi } from '@/lib/api/entities.api';
 import { usersApi } from '@/lib/api/users.api';
 import { documentsApi } from '@/lib/api/documents.api';
@@ -59,15 +64,33 @@ export default function OutboxPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // Reset to first page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [search, entityFilter, statusFilter, priorityFilter]);
+
   // Fetch documents
-  const { data, isLoading } = useOutboxDocuments({
+  const { data, isLoading, refetch } = useOutboxDocuments({
+    page: currentPage,
+    limit: pageSize,
     search: search || undefined,
     entityId: entityFilter !== 'all' ? entityFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    priority: priorityFilter !== 'all' ? priorityFilter : undefined,
   });
 
   // Fetch entities
@@ -78,6 +101,7 @@ export default function OutboxPage() {
 
   // Mutations
   const archiveDocument = useArchiveDocument();
+  const deleteDocument = useDeleteDocument();
 
   const documents = data?.data || [];
   const filteredDocs = documents;
@@ -126,13 +150,36 @@ export default function OutboxPage() {
     }
   };
 
-  // Handle edit
+  // Handle edit - open detail sheet
   const handleEdit = (doc: any) => {
+    console.log('[OUTBOX] handleEdit called for document:', doc.id, doc.title);
+    console.log('[OUTBOX] Setting selectedDocument and opening sheet...');
     setSelectedDocument(doc);
+    setDetailSheetOpen(true);
+    console.log('[OUTBOX] State updated - selectedDocument:', doc.id, 'detailSheetOpen: true');
+  };
+
+  // Handle open edit dialog from detail sheet
+  const handleOpenEditDialog = (doc: any) => {
+    setSelectedDocument(doc);
+    setDetailSheetOpen(false);
     setEditDialogOpen(true);
   };
 
   // Handle delete
+  const handleArchive = (doc: any) => {
+    setSelectedDocument(doc);
+    setArchiveDialogOpen(true);
+  };
+
+  const confirmArchive = () => {
+    if (selectedDocument) {
+      archiveDocument.mutate(selectedDocument.id);
+      setArchiveDialogOpen(false);
+      setSelectedDocument(null);
+    }
+  };
+
   const handleDelete = (doc: any) => {
     setSelectedDocument(doc);
     setDeleteDialogOpen(true);
@@ -140,10 +187,19 @@ export default function OutboxPage() {
 
   const confirmDelete = () => {
     if (selectedDocument) {
-      archiveDocument.mutate(selectedDocument.id);
-      setDeleteDialogOpen(false);
-      setSelectedDocument(null);
+      deleteDocument.mutate(selectedDocument.id, {
+        onSuccess: () => {
+          setDeleteDialogOpen(false);
+          setSelectedDocument(null);
+          refetch(); // Refresh the document list
+        },
+      });
     }
+  };
+
+  const handleAssign = (doc: any) => {
+    setSelectedDocument(doc);
+    setAssignDialogOpen(true);
   };
 
   // Batch operations
@@ -248,6 +304,31 @@ export default function OutboxPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-36">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="DRAFT">Borrador</SelectItem>
+            <SelectItem value="PENDING">Pendiente</SelectItem>
+            <SelectItem value="IN_PROGRESS">En proceso</SelectItem>
+            <SelectItem value="COMPLETED">Completado</SelectItem>
+            <SelectItem value="ARCHIVED">Archivado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-full sm:w-36">
+            <SelectValue placeholder="Prioridad" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="URGENT">🔴 Urgente</SelectItem>
+            <SelectItem value="HIGH">🟠 Alta</SelectItem>
+            <SelectItem value="MEDIUM">🟡 Media</SelectItem>
+            <SelectItem value="LOW">🟢 Baja</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Bulk actions toolbar */}
@@ -306,8 +387,26 @@ export default function OutboxPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDocs.map((doc: any) => (
-                <TableRow key={doc.id} className="group">
+              {filteredDocs.map((doc: any, index: number) => {
+                const handleRowClick = (e: React.MouseEvent) => {
+                  console.log('[OUTBOX] Row clicked:', doc.title, e.target);
+                  // Don't trigger if clicking checkbox or dropdown button
+                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('[role="checkbox"]')) {
+                    console.log('[OUTBOX] Click ignored - button or checkbox');
+                    return;
+                  }
+                  console.log('[OUTBOX] Opening detail sheet for:', doc.id);
+                  handleEdit(doc);
+                };
+
+                return (
+                <TableRow
+                  key={doc.id}
+                  className="group transition-colors hover:bg-muted/50 cursor-pointer select-none"
+                  style={{ animationDelay: `${index * 0.03}s`, pointerEvents: 'auto' }}
+                  onClick={handleRowClick}
+                  onMouseDown={(e) => console.log('[OUTBOX] MouseDown on row:', doc.title)}
+                >
                   <TableCell>
                     <Checkbox
                       checked={selectedIds.includes(doc.id)}
@@ -359,23 +458,59 @@ export default function OutboxPage() {
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAssign(doc)}>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Asignar
+                        </DropdownMenuItem>
                         <DropdownMenuItem>
                           <PenTool className="h-4 w-4 mr-2" />
                           Enviar a firma
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleDelete(doc)} className="text-red-600">
-                          <Trash2 className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem onClick={() => handleArchive(doc)}>
+                          <Archive className="h-4 w-4 mr-2 text-blue-600" />
                           Archivar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(doc)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {/* Pagination */}
+      {!isLoading && filteredDocs.length > 0 && (
+        <div className="mt-6">
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={data?.totalPages || 1}
+            pageSize={pageSize}
+            totalItems={data?.total || filteredDocs.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
+        </div>
+      )}
+
+      {/* Document Detail Sheet */}
+      {selectedDocument && (
+        <DocumentDetailSheet
+          open={detailSheetOpen}
+          onOpenChange={setDetailSheetOpen}
+          documentId={selectedDocument.id}
+          onEdit={handleOpenEditDialog}
+        />
       )}
 
       {/* Edit Dialog */}
@@ -387,8 +522,8 @@ export default function OutboxPage() {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* Archive Confirmation Dialog */}
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Archivar documento?</AlertDialogTitle>
@@ -399,12 +534,47 @@ export default function OutboxPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmArchive} className="bg-blue-600 hover:bg-blue-700">
               Archivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">⚠️ ¿Eliminar documento permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold">Esta acción no se puede deshacer.</span>
+              <br /><br />
+              ¿Está seguro de que desea eliminar permanentemente el documento "{selectedDocument?.title}"?
+              <br /><br />
+              <span className="text-destructive text-sm">
+                El documento será eliminado completamente del sistema.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteDocument.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteDocument.isPending}
+            >
+              {deleteDocument.isPending ? 'Eliminando...' : 'Eliminar Permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Assign Dialog */}
+      <AssignDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        document={selectedDocument}
+      />
     </div>
   );
 }

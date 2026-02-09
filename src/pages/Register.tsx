@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -46,6 +46,11 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
+interface Department {
+  id: string;
+  name: string;
+}
+
 export default function Register() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -53,6 +58,8 @@ export default function Register() {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
 
   const {
     register,
@@ -62,6 +69,34 @@ export default function Register() {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
+
+  // Fetch departments from API
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        const response = await fetch(`${API_URL}/departments`);
+
+        if (response.ok) {
+          const data = await response.json();
+          setDepartments(data);
+        } else {
+          toast.error('Error al cargar departamentos', {
+            description: 'No se pudieron cargar los departamentos. Por favor, recarga la página.',
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+        toast.error('Error de conexión', {
+          description: 'No se pudo conectar con el servidor.',
+        });
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+
+    fetchDepartments();
+  }, []);
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
@@ -115,18 +150,6 @@ export default function Register() {
       });
     }
   };
-
-  // Real departments from database
-  const departments = [
-    { id: 'cmkfiqs100004ha6ohxtepnk4', name: 'Gabinete Ministerial' },
-    { id: 'cmkfiqs110006ha6olxp1ma63', name: 'Dirección General de Transportes' },
-    { id: 'cmkfiqs130008ha6ov08kk52b', name: 'Dirección General de Telecomunicaciones' },
-    { id: 'cmkfiqs15000aha6osohbre3a', name: 'Dirección General de Sistemas de Inteligencia Artificial' },
-    { id: 'cmkfiqs17000cha6o0yxnto23', name: 'Dirección General de Administración' },
-    { id: 'cmkfiqs19000eha6olmn6i70p', name: 'Dirección General de Recursos Humanos' },
-    { id: 'cmkfiqs1b000gha6oue0kh7ds', name: 'Dirección General de Planificación' },
-    { id: 'cmkfiqs1c000iha6oylw8hqec', name: 'Asesoría Jurídica' },
-  ];
 
   return (
     <div className="min-h-screen flex">
@@ -341,16 +364,22 @@ export default function Register() {
               </Label>
               <div className="relative group">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors z-10" />
-                <Select onValueChange={(value) => setValue('departmentId', value)}>
+                <Select onValueChange={(value) => setValue('departmentId', value)} disabled={loadingDepartments || isSubmitting}>
                   <SelectTrigger className={`pl-10 ${errors.departmentId ? 'border-destructive' : ''}`}>
-                    <SelectValue placeholder="Seleccionar departamento" />
+                    <SelectValue placeholder={loadingDepartments ? "Cargando departamentos..." : "Seleccionar departamento"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
+                    {departments.length > 0 ? (
+                      departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No hay departamentos disponibles
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

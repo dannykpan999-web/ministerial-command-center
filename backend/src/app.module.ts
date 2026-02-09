@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -13,6 +14,10 @@ import { UsersModule } from './users/users.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { EntitiesModule } from './entities/entities.module';
 import { DocumentsModule } from './documents/documents.module';
+import { FilesModule } from './files/files.module';
+import { DeadlinesModule } from './deadlines/deadlines.module';
+import { ExpedientesModule } from './expedientes/expedientes.module';
+import { WorkflowModule } from './workflow/workflow.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -21,6 +26,8 @@ import { AppController } from './app.controller';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // Task scheduling for cron jobs
+    ScheduleModule.forRoot(),
     // Rate limiting
     ThrottlerModule.forRoot([
       {
@@ -48,6 +55,11 @@ import { AppController } from './app.controller';
     DepartmentsModule,
     EntitiesModule,
     DocumentsModule,
+    FilesModule,
+    DeadlinesModule,
+    ExpedientesModule,
+    // Workflow System (Global)
+    WorkflowModule,
   ],
   controllers: [AppController],
   providers: [],

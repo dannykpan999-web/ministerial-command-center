@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { documentsApi } from '@/lib/api/documents.api';
+import { entitiesApi } from '@/lib/api/entities.api';
+import { toast } from 'sonner';
+import jsPDF from 'jspdf';
 import {
   Select,
   SelectContent,
@@ -35,7 +41,9 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  title?: string;
   sources?: { title: string; id: string }[];
+  metadata?: any;
 }
 
 const modes = [
@@ -52,20 +60,37 @@ const tones = [
   { id: 'internal', label: 'Nota interna' },
 ];
 
+const documentTypes = [
+  { id: 'RESPUESTA', label: 'Respuesta a Oficio' },
+  { id: 'MEMORANDO', label: 'Memorando Interno' },
+  { id: 'DECRETO', label: 'Decreto Ministerial' },
+  { id: 'OFICIO', label: 'Oficio' },
+  { id: 'RESOLUCION', label: 'Resolución' },
+  { id: 'CARTA', label: 'Carta Oficial' },
+];
+
 export default function AIAssistant() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'Hola, soy tu asistente de inteligencia artificial. ¿En qué puedo ayudarte hoy?\n\nPuedo ayudarte a:\n- Resumir documentos\n- Redactar respuestas oficiales\n- Extraer puntos clave\n- Traducir contenido\n- Preparar memorandos',
+      content: 'Hola, soy tu asistente de inteligencia artificial. ¿En qué puedo ayudarte hoy?\n\nPuedo ayudarte a:\n- Generar documentos oficiales (Respuestas, Memorandos, Decretos, etc.)\n- Resumir documentos existentes\n- Redactar respuestas oficiales\n- Extraer puntos clave\n\nSelecciona un tipo de documento y describe lo que necesitas generar.',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
+  const [documentType, setDocumentType] = useState<string>('RESPUESTA');
   const [tone, setTone] = useState('formal');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch entities for document creation
+  const { data: entitiesData, isLoading: isLoadingEntities, error: entitiesError } = useQuery({
+    queryKey: ['entities'],
+    queryFn: () => entitiesApi.getAll(),
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -75,53 +100,222 @@ export default function AIAssistant() {
     scrollToBottom();
   }, [messages]);
 
+  // Log entities loading errors
+  useEffect(() => {
+    if (entitiesError) {
+      console.error('Error loading entities:', entitiesError);
+      toast.error('Error al cargar entidades. Algunas funciones pueden no estar disponibles.');
+    }
+  }, [entitiesError]);
+
+  // Mutation for generating document from prompt
+  const generateMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      return documentsApi.generateFromPrompt({
+        documentType,
+        prompt,
+        tone,
+        language: 'es',
+      });
+    },
+    onSuccess: (data) => {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.content,
+        title: data.title,
+        metadata: data.metadata,
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setLoading(false);
+    },
+    onError: (error: any) => {
+      console.error('Error generating document:', error);
+      const errorMessage = error.response?.data?.message || 'Error al generar documento. Por favor, intente nuevamente.';
+      toast.error(errorMessage);
+      setLoading(false);
+    },
+  });
+
   const handleSend = async () => {
-    if (!input.trim() && !selectedMode) return;
+    if (!input.trim()) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: selectedMode 
-        ? `[Modo: ${modes.find(m => m.id === selectedMode)?.label}] ${input}`
-        : input,
+      content: `[${documentTypes.find(dt => dt.id === documentType)?.label}] ${input}`,
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
-    setSelectedMode(null);
     setLoading(true);
 
-    // Simulate AI response
-    await delay(1500);
-
-    const responses: Record<string, string> = {
-      summarize: `**Resumen del documento**\n\nEl documento presenta una solicitud formal de Terminal Marítima S.A. para la ampliación del plazo de concesión portuaria.\n\n**Puntos principales:**\n1. La solicitud se basa en inversiones de USD 45 millones realizadas entre 2022-2024\n2. Se solicita una extensión de 15 años adicionales\n3. Se comprometen a mejoras de infraestructura adicionales\n\n**Recomendación:** Revisar con el departamento legal antes de proceder.`,
-      draft: `**Borrador de respuesta**\n\n---\n\nEstimados señores de Terminal Marítima S.A.,\n\nAcusamos recibo de su comunicación de fecha [fecha], referente a la solicitud de ampliación de la concesión portuaria.\n\nAl respecto, informamos que su solicitud ha sido recibida y será evaluada por las instancias técnicas correspondientes en un plazo de [XX] días hábiles.\n\nQuedamos a su disposición para cualquier consulta adicional.\n\nAtentamente,\n\n[Firma]`,
-      keypoints: `**Puntos clave extraídos:**\n\n✓ **Inversión realizada:** USD 45 millones (2022-2024)\n✓ **Solicitud:** Ampliación de concesión\n✓ **Justificación:** Inversiones adicionales\n✓ **Plazo solicitado:** 15 años adicionales\n✓ **Compromisos:** Mejoras de infraestructura\n✓ **Urgencia:** Media-Alta\n\n**Acciones requeridas:**\n1. Revisión legal del contrato vigente\n2. Evaluación técnica de inversiones\n3. Consulta con autoridades portuarias`,
-      translate: `**Traducción al inglés:**\n\n---\n\nSubject: Request for Port Concession Extension\n\nDear Minister,\n\nThrough this letter, Terminal Marítima S.A. formally requests an extension of the concession period granted under Resolution No. 2020-0234, corresponding to the northern pier facilities of the main port.\n\nThis request is based on additional investments made during 2022-2024, amounting to USD 45 million...`,
-      memo: `**MEMORANDO INTERNO**\n\n**Para:** Gabinete Ministerial\n**De:** Dirección de Asuntos Portuarios\n**Fecha:** ${new Date().toLocaleDateString('es')}\n**Asunto:** Solicitud de ampliación de concesión - Terminal Marítima S.A.\n\n---\n\n**1. Antecedentes**\nSe ha recibido solicitud formal de ampliación de concesión...\n\n**2. Análisis**\nLa empresa ha demostrado cumplimiento de obligaciones...\n\n**3. Recomendación**\nSe sugiere proceder con evaluación técnica detallada...`,
-    };
-
-    const defaultResponse = `Entendido. He analizado tu consulta.\n\nBasándome en el contexto disponible, puedo indicarte que:\n\n1. La documentación relacionada está disponible en el expediente EXP-2024-00342\n2. Se recomienda coordinar con el departamento legal\n3. El plazo para respuesta es de 15 días hábiles\n\n¿Necesitas que profundice en algún aspecto específico?`;
-
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: responses[selectedMode || ''] || defaultResponse,
-      sources: [
-        { title: 'ENT-2024-001542 - Solicitud ampliación', id: 'd1' },
-        { title: 'EXP-2024-00342 - Renovación Terminal Norte', id: 'exp1' },
-      ],
-    };
-
-    setMessages(prev => [...prev, aiMessage]);
-    setLoading(false);
+    // Call real API
+    generateMutation.mutate(currentInput);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleCopy = async (content: string) => {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(content);
+        toast.success('Texto copiado al portapapeles');
+        return;
+      }
+    } catch (clipboardError) {
+      console.log('Modern clipboard API failed, trying fallback:', clipboardError);
+    }
+
+    // Fallback for older browsers or HTTP (non-HTTPS)
+    try {
+      const textArea = window.document.createElement('textarea');
+      textArea.value = content;
+
+      // Make textarea visible but out of viewport
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '0';
+      textArea.style.opacity = '0';
+
+      window.document.body.appendChild(textArea);
+
+      // Select the text
+      textArea.focus();
+      textArea.select();
+      textArea.setSelectionRange(0, content.length);
+
+      // Execute copy command
+      const successful = window.document.execCommand('copy');
+
+      // Remove textarea
+      window.document.body.removeChild(textArea);
+
+      if (successful) {
+        toast.success('Texto copiado al portapapeles');
+      } else {
+        toast.error('Error al copiar texto. Por favor, intente copiar manualmente.');
+      }
+    } catch (error) {
+      console.error('Copy failed:', error);
+      toast.error('Error al copiar texto. Por favor, intente copiar manualmente.');
+    }
+  };
+
+  const handleSaveDocument = async (message: Message) => {
+    try {
+      if (!user) {
+        toast.error('Usuario no autenticado. Por favor, inicie sesión nuevamente.');
+        return;
+      }
+
+      if (isLoadingEntities) {
+        toast.error('Cargando entidades. Por favor, espere un momento.');
+        return;
+      }
+
+      if (!entitiesData || entitiesData.length === 0) {
+        toast.error('No hay entidades disponibles. Contacte al administrador.');
+        return;
+      }
+
+      // Get the first entity as default
+      const defaultEntity = entitiesData[0];
+
+      // Create document as DRAFT
+      const documentData = {
+        title: message.title || 'Documento Generado por IA',
+        type: documentType,
+        direction: 'OUT' as const,
+        classification: 'EXTERNAL' as const,
+        entityId: defaultEntity.id,
+        responsibleId: user.id,
+        content: message.content,
+        isDraft: true,
+        priority: 'MEDIUM' as const,
+        tags: ['AI-Generated', documentType],
+      };
+
+      const result = await documentsApi.create(documentData);
+
+      toast.success(
+        `Documento guardado como borrador con ID: ${result.documentNumber || 'N/A'}`,
+        {
+          description: 'Puede editarlo desde la sección de documentos',
+          duration: 5000,
+        }
+      );
+    } catch (error: any) {
+      console.error('Error saving document:', error);
+      toast.error(
+        error.response?.data?.message || 'Error al guardar el documento'
+      );
+    }
+  };
+
+  const handleDownloadPDF = (message: Message) => {
+    try {
+      // Create PDF using jsPDF
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // Add title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(message.title || 'Documento Generado por IA', 20, 20);
+
+      // Add metadata
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Tipo: ${documentTypes.find(dt => dt.id === documentType)?.label}`, 20, 30);
+      doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')}`, 20, 35);
+
+      if (message.metadata) {
+        doc.text(`Palabras: ${message.metadata.wordCount || 'N/A'}`, 20, 40);
+        doc.text(`Páginas estimadas: ${message.metadata.estimatedPages || 'N/A'}`, 20, 45);
+      }
+
+      // Add content
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+
+      // Split content into lines
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - (margin * 2);
+      const lines = doc.splitTextToSize(message.content, maxWidth);
+
+      let yPosition = 55;
+      const lineHeight = 7;
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      lines.forEach((line: string) => {
+        if (yPosition > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        doc.text(line, margin, yPosition);
+        yPosition += lineHeight;
+      });
+
+      // Save PDF
+      const filename = `${message.title?.replace(/\s+/g, '_') || 'documento'}_${Date.now()}.pdf`;
+      doc.save(filename);
+
+      toast.success('PDF descargado correctamente');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Error al generar el PDF');
     }
   };
 
@@ -134,19 +328,21 @@ export default function AIAssistant() {
           description={t('ai.description')}
         />
 
-        {/* Mode Buttons */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {modes.map(mode => (
-            <Button
-              key={mode.id}
-              variant={selectedMode === mode.id ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedMode(selectedMode === mode.id ? null : mode.id)}
-            >
-              <mode.icon className="h-4 w-4 mr-1" />
-              {mode.label}
-            </Button>
-          ))}
+        {/* Document Type Selector */}
+        <div className="mb-4">
+          <Label className="text-sm font-medium mb-2 block">Tipo de Documento</Label>
+          <Select value={documentType} onValueChange={setDocumentType}>
+            <SelectTrigger className="w-full max-w-md">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {documentTypes.map(type => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Messages */}
@@ -182,15 +378,32 @@ export default function AIAssistant() {
                     </div>
                   </div>
                 )}
-                {message.role === 'assistant' && message.id !== '1' && (
-                  <div className="flex gap-2 mt-3">
-                    <Button variant="outline" size="sm">
+                {message.role === 'assistant' && message.id !== '1' && message.content && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopy(message.content)}
+                    >
                       <Copy className="h-3 w-3 mr-1" />
                       Copiar
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleSaveDocument(message)}
+                      disabled={isLoadingEntities || !entitiesData || entitiesData.length === 0}
+                    >
                       <Plus className="h-3 w-3 mr-1" />
-                      {t('ai.insert_draft')}
+                      {isLoadingEntities ? 'Cargando...' : 'Guardar como Documento'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadPDF(message)}
+                    >
+                      <FileText className="h-3 w-3 mr-1" />
+                      Descargar PDF
                     </Button>
                   </div>
                 )}
@@ -223,15 +436,15 @@ export default function AIAssistant() {
         {/* Input Area */}
         <div className="flex gap-2">
           <Textarea
-            placeholder={t('ai.placeholder')}
+            placeholder="Ej: Generar respuesta oficial sobre solicitud de información presupuestaria del Ministerio de Educación..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             className="min-h-12 max-h-32 resize-none"
             rows={1}
           />
-          <Button onClick={handleSend} disabled={loading || (!input.trim() && !selectedMode)}>
-            <Send className="h-4 w-4" />
+          <Button onClick={handleSend} disabled={loading || !input.trim()}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>

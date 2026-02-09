@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -16,38 +16,46 @@ import {
   CheckCircle,
   Bell,
 } from 'lucide-react';
-import {
-  fetchDeadlines,
-  getUserById,
-  getExpedienteById,
-  Deadline,
-} from '@/lib/mockData';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { getDeadlines, Deadline } from '@/lib/api/deadlines.api';
+import { CreateDeadlineDialog } from '@/components/deadlines/CreateDeadlineDialog';
 
 export default function DeadlinesPage() {
   const { t } = useLanguage();
-  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'calendar' | 'list'>('list');
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      const data = await fetchDeadlines();
-      setDeadlines(data);
-      setLoading(false);
+  // Fetch deadlines from API
+  const { data: deadlines = [], isLoading: loading } = useQuery({
+    queryKey: ['deadlines'],
+    queryFn: getDeadlines,
+  });
+
+  // Helper function to determine deadline display status
+  const getDeadlineDisplayStatus = (deadline: Deadline): 'upcoming' | 'urgent' | 'overdue' => {
+    if (deadline.status === 'COMPLETED') {
+      return 'upcoming'; // Completed items shown as calm
     }
-    loadData();
-  }, []);
+    if (deadline.status === 'OVERDUE') {
+      return 'overdue';
+    }
+    const daysUntilDue = differenceInDays(new Date(deadline.dueDate), new Date());
+    if (daysUntilDue <= 2) {
+      return 'urgent';
+    }
+    return 'upcoming';
+  };
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const getDeadlinesForDay = (day: Date) => {
-    return deadlines.filter(d => isSameDay(d.dueDate, day));
+    return deadlines.filter(d => isSameDay(new Date(d.dueDate), day));
   };
 
   const statusVariants: Record<string, 'warning' | 'destructive' | 'muted'> = {
@@ -63,8 +71,10 @@ export default function DeadlinesPage() {
   };
 
   const sortedDeadlines = [...deadlines].sort((a, b) => {
+    const statusA = getDeadlineDisplayStatus(a);
+    const statusB = getDeadlineDisplayStatus(b);
     const order = { overdue: 0, urgent: 1, upcoming: 2 };
-    return order[a.status] - order[b.status];
+    return order[statusA] - order[statusB];
   });
 
   return (
@@ -73,7 +83,7 @@ export default function DeadlinesPage() {
         title={t('deadlines.title')}
         description={t('deadlines.description')}
         action={
-          <Button size="sm" className="h-9 sm:h-10">
+          <Button size="sm" className="h-9 sm:h-10" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">{t('deadlines.new_deadline')}</span>
           </Button>
@@ -138,20 +148,19 @@ export default function DeadlinesPage() {
         ) : (
           <div className="space-y-2 sm:space-y-3">
             {sortedDeadlines.map(deadline => {
-              const user = getUserById(deadline.assignedTo);
-              const expediente = getExpedienteById(deadline.expedienteId);
+              const displayStatus = getDeadlineDisplayStatus(deadline);
               return (
                 <Card key={deadline.id} className="hover:border-primary/20 transition-colors cursor-pointer active:scale-[0.98]">
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex items-start gap-3 sm:gap-4">
                       <div className={cn(
                         'h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center shrink-0',
-                        deadline.status === 'overdue' ? 'bg-destructive/10 text-destructive' :
-                        deadline.status === 'urgent' ? 'bg-warning/10 text-warning' :
+                        displayStatus === 'overdue' ? 'bg-destructive/10 text-destructive' :
+                        displayStatus === 'urgent' ? 'bg-warning/10 text-warning' :
                         'bg-muted text-muted-foreground'
                       )}>
-                        {deadline.status === 'overdue' ? <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" /> :
-                         deadline.status === 'urgent' ? <Clock className="h-4 w-4 sm:h-5 sm:w-5" /> :
+                        {displayStatus === 'overdue' ? <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" /> :
+                         displayStatus === 'urgent' ? <Clock className="h-4 w-4 sm:h-5 sm:w-5" /> :
                          <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -159,14 +168,14 @@ export default function DeadlinesPage() {
                         <div className="sm:hidden">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <h3 className="font-medium text-sm truncate">{deadline.title}</h3>
-                            <StatusBadge variant={statusVariants[deadline.status]} className="text-[10px] shrink-0">
-                              {statusLabels[deadline.status]}
+                            <StatusBadge variant={statusVariants[displayStatus]} className="text-[10px] shrink-0">
+                              {statusLabels[displayStatus]}
                             </StatusBadge>
                           </div>
                           <p className="text-xs text-muted-foreground truncate mb-1">
-                            {expediente?.number} · {user?.name}
+                            {deadline.document?.correlativeNumber || deadline.expediente?.code || 'Sin expediente'}
                           </p>
-                          <p className="text-xs font-medium">{format(deadline.dueDate, "d MMM", { locale: es })}</p>
+                          <p className="text-xs font-medium">{format(new Date(deadline.dueDate), "d MMM", { locale: es })}</p>
                         </div>
                         {/* Desktop layout */}
                         <div className="hidden sm:block">
@@ -174,13 +183,16 @@ export default function DeadlinesPage() {
                             <div>
                               <h3 className="font-medium">{deadline.title}</h3>
                               <p className="text-sm text-muted-foreground mt-0.5">
-                                {expediente?.number} · {user?.name}
+                                {deadline.document?.title || deadline.expediente?.title || 'Sin documento asociado'}
                               </p>
+                              {deadline.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{deadline.description}</p>
+                              )}
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="font-medium">{format(deadline.dueDate, "d 'de' MMMM", { locale: es })}</p>
-                              <StatusBadge variant={statusVariants[deadline.status]} className="mt-1">
-                                {statusLabels[deadline.status]}
+                              <p className="font-medium">{format(new Date(deadline.dueDate), "d 'de' MMMM", { locale: es })}</p>
+                              <StatusBadge variant={statusVariants[displayStatus]} className="mt-1">
+                                {statusLabels[displayStatus]}
                               </StatusBadge>
                             </div>
                           </div>
@@ -261,36 +273,42 @@ export default function DeadlinesPage() {
                     <div className="mt-0.5 sm:mt-1 space-y-0.5 sm:space-y-1">
                       {/* Mobile: Show dots only */}
                       <div className="sm:hidden flex gap-0.5 flex-wrap">
-                        {dayDeadlines.slice(0, 3).map(d => (
-                          <div
-                            key={d.id}
-                            className={cn(
-                              'h-1.5 w-1.5 rounded-full',
-                              d.status === 'overdue' ? 'bg-destructive' :
-                              d.status === 'urgent' ? 'bg-warning' :
-                              'bg-muted-foreground'
-                            )}
-                          />
-                        ))}
+                        {dayDeadlines.slice(0, 3).map(d => {
+                          const displayStatus = getDeadlineDisplayStatus(d);
+                          return (
+                            <div
+                              key={d.id}
+                              className={cn(
+                                'h-1.5 w-1.5 rounded-full',
+                                displayStatus === 'overdue' ? 'bg-destructive' :
+                                displayStatus === 'urgent' ? 'bg-warning' :
+                                'bg-muted-foreground'
+                              )}
+                            />
+                          );
+                        })}
                         {dayDeadlines.length > 3 && (
                           <span className="text-[8px] text-muted-foreground">+{dayDeadlines.length - 3}</span>
                         )}
                       </div>
                       {/* Desktop: Show full labels */}
                       <div className="hidden sm:block">
-                        {dayDeadlines.slice(0, 2).map(d => (
-                          <div
-                            key={d.id}
-                            className={cn(
-                              'text-xs p-1 rounded truncate',
-                              d.status === 'overdue' ? 'bg-destructive/10 text-destructive' :
-                              d.status === 'urgent' ? 'bg-warning/10 text-warning' :
-                              'bg-muted text-muted-foreground'
-                            )}
-                          >
-                            {d.title}
-                          </div>
-                        ))}
+                        {dayDeadlines.slice(0, 2).map(d => {
+                          const displayStatus = getDeadlineDisplayStatus(d);
+                          return (
+                            <div
+                              key={d.id}
+                              className={cn(
+                                'text-xs p-1 rounded truncate',
+                                displayStatus === 'overdue' ? 'bg-destructive/10 text-destructive' :
+                                displayStatus === 'urgent' ? 'bg-warning/10 text-warning' :
+                                'bg-muted text-muted-foreground'
+                              )}
+                            >
+                              {d.title}
+                            </div>
+                          );
+                        })}
                         {dayDeadlines.length > 2 && (
                           <div className="text-xs text-muted-foreground">
                             +{dayDeadlines.length - 2} más
@@ -305,6 +323,9 @@ export default function DeadlinesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Create Deadline Dialog */}
+      <CreateDeadlineDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { DepartmentsService } from './departments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('departments')
 @Controller('departments')
@@ -10,8 +11,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class DepartmentsController {
   constructor(private departmentsService: DepartmentsService) {}
 
+  @Public()
   @Get()
-  @ApiOperation({ summary: 'Get all departments' })
+  @ApiOperation({ summary: 'Get all departments (public for registration)' })
   findAll() {
     return this.departmentsService.findAll();
   }
