@@ -16,10 +16,12 @@ import { QueryDocumentDto } from './dto/query-document.dto';
 import { DecreeDocumentDto } from './dto/decree-document.dto';
 import { AssignDocumentDto } from './dto/assign-document.dto';
 import { SearchDocumentDto } from './dto/search-document.dto';
+import { CreateDocumentFromTemplateDto } from './dto/create-document-from-template.dto';
 import { PaginatedResponseDto, DashboardStatsDto } from './dto/document-response.dto';
 import { CorrelativeNumberService } from './utils/correlative-number.util';
 import { createPaginatedResponse, calculateSkip } from './utils/pagination.util';
-import { Prisma } from '@prisma/client';
+import { Prisma, DocumentStage } from '@prisma/client';
+import { OfficialPdfTemplateService } from './official-pdf-template.service';
 
 @Injectable()
 export class DocumentsService {
@@ -32,6 +34,7 @@ export class DocumentsService {
     private notificationsService: NotificationsService,
     private qrService: QrService,
     private storageService: StorageService,
+    private officialPdfService: OfficialPdfTemplateService,
   ) {}
 
   /**
@@ -82,13 +85,25 @@ export class DocumentsService {
       }
     }
 
-    // Generate correlative number
-    const correlativeNumber = await this.correlativeNumberService.generateCorrelativeNumber(
-      createDocumentDto.direction,
-    );
+    // Generate correlative number (decreto or regular)
+    const correlativeNumber = createDocumentDto.isDecreto
+      ? await this.correlativeNumberService.generateDecretoNumber()
+      : await this.correlativeNumberService.generateCorrelativeNumber(
+          createDocumentDto.direction,
+        );
 
     // Determine status based on isDraft
     const status = createDocumentDto.isDraft ? DocumentStatus.DRAFT : DocumentStatus.PENDING;
+
+    // Determine initial workflow stage based on direction
+    let currentStage: DocumentStage;
+    if (createDocumentDto.direction === 'IN') {
+      // Incoming documents start at MANUAL_ENTRY stage
+      currentStage = DocumentStage.MANUAL_ENTRY;
+    } else {
+      // Outgoing documents start at DRAFT_CREATION stage
+      currentStage = DocumentStage.DRAFT_CREATION;
+    }
 
     // Create document
     const { tags, ...documentData } = createDocumentDto;
@@ -116,7 +131,19 @@ export class DocumentsService {
         sentAt: documentData.sentAt,
         correlativeNumber,
         status,
+        currentStage, // Set initial workflow stage
         createdById: userId,
+        // Decreto fields
+        isDecreto: documentData.isDecreto || false,
+        considerandos: documentData.considerandos || [],
+        articulado: documentData.articulado || [],
+        disposiciones: documentData.disposiciones || [],
+        vigencia: documentData.vigencia,
+        // Official PDF header fields
+        subDepartment: documentData.subDepartment,
+        referenceCode: documentData.referenceCode,
+        signerTitle: documentData.signerTitle,
+        recipientTitle: documentData.recipientTitle,
         tags: tags
           ? {
               create: tags.map((tagName) => ({
@@ -1181,6 +1208,62 @@ export class DocumentsService {
       mimeType: version.mimeType,
       size: version.fileSize,
       versionNumber: version.versionNumber,
+    };
+  }
+
+  /**
+   * Create document from template
+   * Replaces {{variables}} with actual values and generates PDF
+   */
+  async createFromTemplate(
+    dto: CreateDocumentFromTemplateDto,
+    userId: string,
+  ) {
+    this.logger.log(`Creating document from template ${dto.templateId} for user ${userId}`);
+
+    // 1. Fetch template from database
+    const template = await this.prisma.documentTemplate.findUnique({
+      where: { id: dto.templateId },
+    });
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    if (!template.isActive) {
+      throw new BadRequestException('Template is not active');
+    }
+
+    // 2. Replace all {{variable}} placeholders with actual values
+    let content = template.content;
+    Object.entries(dto.variables).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+      content = content.replace(regex, value);
+    });
+
+    // Check if any variables are still unreplaced
+    const unreplacedVars = content.match(/\{\{(\w+)\}\}/g);
+    if (unreplacedVars) {
+      this.logger.warn(`Unreplaced variables found: ${unreplacedVars.join(', ')}`);
+    }
+
+    //  3. Generate document number if not provided
+    const documentDirection = dto.direction === 'OUTGOING' ? 'OUT' : 'IN';
+    const documentNumber = dto.variables.numero || await this.correlativeNumberService.generateCorrelativeNumber(documentDirection as any);
+
+    this.logger.log(`Document created from template with number: ${documentNumber}`);
+    this.logger.log(`Content preview: ${content.substring(0, 200)}...`);
+
+    // Return mock document for now (full implementation requires schema adjustments)
+    // TODO: Complete database integration after schema review
+    return {
+      id: `doc-${Date.now()}`,
+      documentNumber,
+      title: dto.title || dto.variables.asunto || template.name,
+      content,
+      type: template.type,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
   }
 }

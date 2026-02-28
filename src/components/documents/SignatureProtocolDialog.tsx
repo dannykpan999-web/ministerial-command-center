@@ -306,6 +306,13 @@ export function SignatureProtocolDialog({
 
           {/* Signature Tab */}
           <TabsContent value="signature" className="space-y-4">
+            {isSigned && (
+              <Alert>
+                <AlertDescription>
+                  Este documento ya ha sido firmado. No se pueden realizar cambios a la firma ministerial.
+                </AlertDescription>
+              </Alert>
+            )}
             <form onSubmit={handleSignatureSubmit} className="space-y-4">
               {/* Signature Type */}
               <div className="space-y-2">
@@ -315,6 +322,7 @@ export function SignatureProtocolDialog({
                   onValueChange={(value) =>
                     setSignatureData({ ...signatureData, signatureType: value as any })
                   }
+                  disabled={isSigned}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -338,6 +346,7 @@ export function SignatureProtocolDialog({
                     setSignatureData({ ...signatureData, signatureDate: e.target.value })
                   }
                   required
+                  disabled={isSigned}
                 />
               </div>
 
@@ -350,7 +359,7 @@ export function SignatureProtocolDialog({
                     type="file"
                     accept="image/*"
                     onChange={handleDigitalSignatureChange}
-                    disabled={signDocumentMutation.isPending}
+                    disabled={signDocumentMutation.isPending || isSigned}
                   />
                   {digitalSignature && (
                     <p className="text-sm text-muted-foreground">
@@ -369,7 +378,7 @@ export function SignatureProtocolDialog({
                     type="file"
                     accept="image/*"
                     onChange={handlePhysicalSignatureChange}
-                    disabled={signDocumentMutation.isPending}
+                    disabled={signDocumentMutation.isPending || isSigned}
                   />
                   {physicalSignatureScan && (
                     <p className="text-sm text-muted-foreground">
@@ -388,6 +397,7 @@ export function SignatureProtocolDialog({
                   value={signatureData.notes}
                   onChange={(e) => setSignatureData({ ...signatureData, notes: e.target.value })}
                   rows={3}
+                  disabled={isSigned}
                 />
               </div>
 
@@ -400,8 +410,8 @@ export function SignatureProtocolDialog({
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={signDocumentMutation.isPending}>
-                  {signDocumentMutation.isPending ? 'Firmando...' : 'Firmar Documento'}
+                <Button type="submit" disabled={signDocumentMutation.isPending || isSigned}>
+                  {signDocumentMutation.isPending ? 'Firmando...' : isSigned ? 'Ya Firmado' : 'Firmar Documento'}
                 </Button>
               </DialogFooter>
             </form>
@@ -409,6 +419,13 @@ export function SignatureProtocolDialog({
 
           {/* Seal Tab */}
           <TabsContent value="seal" className="space-y-4">
+            {hasSeal && (
+              <Alert>
+                <AlertDescription>
+                  El sello oficial ya ha sido aplicado a este documento.
+                </AlertDescription>
+              </Alert>
+            )}
             <form onSubmit={handleSealSubmit} className="space-y-4">
               {/* Seal Date */}
               <div className="space-y-2">
@@ -419,6 +436,7 @@ export function SignatureProtocolDialog({
                   value={sealData.sealDate}
                   onChange={(e) => setSealData({ ...sealData, sealDate: e.target.value })}
                   required
+                  disabled={hasSeal}
                 />
               </div>
 
@@ -431,6 +449,7 @@ export function SignatureProtocolDialog({
                   value={sealData.appliedBy}
                   onChange={(e) => setSealData({ ...sealData, appliedBy: e.target.value })}
                   required
+                  disabled={hasSeal}
                 />
               </div>
 
@@ -442,7 +461,7 @@ export function SignatureProtocolDialog({
                   type="file"
                   accept="image/*"
                   onChange={handleSealScanChange}
-                  disabled={applySealMutation.isPending}
+                  disabled={applySealMutation.isPending || hasSeal}
                 />
                 {sealScan && (
                   <p className="text-sm text-muted-foreground">
@@ -460,6 +479,7 @@ export function SignatureProtocolDialog({
                   value={sealData.notes}
                   onChange={(e) => setSealData({ ...sealData, notes: e.target.value })}
                   rows={3}
+                  disabled={hasSeal}
                 />
               </div>
 
@@ -472,8 +492,8 @@ export function SignatureProtocolDialog({
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={applySealMutation.isPending}>
-                  {applySealMutation.isPending ? 'Aplicando...' : 'Aplicar Sello Oficial'}
+                <Button type="submit" disabled={applySealMutation.isPending || hasSeal}>
+                  {applySealMutation.isPending ? 'Aplicando...' : hasSeal ? 'Sello Aplicado' : 'Aplicar Sello Oficial'}
                 </Button>
               </DialogFooter>
             </form>

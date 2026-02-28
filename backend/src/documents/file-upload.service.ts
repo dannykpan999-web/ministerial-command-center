@@ -28,7 +28,7 @@ export class FileUploadService {
   ) {
     this.maxFileSize = this.configService.get<number>(
       'MAX_FILE_SIZE',
-      10 * 1024 * 1024,
+      50 * 1024 * 1024,
     );
     this.allowedTypes = this.configService
       .get<string>('ALLOWED_FILE_TYPES', 'pdf,doc,docx,jpg,jpeg,png,txt')
@@ -168,9 +168,29 @@ export class FileUploadService {
       }
     }
 
+    // Update document content with extracted OCR text if document has no content
+    const trimmedExtractedText = combinedExtractedText.trim();
+    if (trimmedExtractedText.length > 0) {
+      const currentDocument = await this.prisma.document.findUnique({
+        where: { id: documentId },
+        select: { content: true },
+      });
+
+      // Only update content if it's currently empty or very short
+      if (!currentDocument?.content || currentDocument.content.trim().length < 50) {
+        // Convert plain OCR text to HTML so CKEditor displays it with proper paragraphs
+        const htmlContent = this.plainTextToHtml(trimmedExtractedText);
+        await this.prisma.document.update({
+          where: { id: documentId },
+          data: { content: htmlContent },
+        });
+        this.logger.log(`Updated document ${documentId} content with OCR text as HTML (${htmlContent.length} chars)`);
+      }
+    }
+
     return {
       files: uploadedFiles,
-      extractedText: combinedExtractedText.trim(),
+      extractedText: trimmedExtractedText,
       totalSize,
     };
   }
@@ -320,18 +340,31 @@ export class FileUploadService {
       };
     }
 
-    // Get text content from document
-    let textContent = document.content || '';
+    // Get text content from document — prefer full content, fall back to aiSummary
+    // (aiSummary was stored during original file upload OCR, content may be HTML-rich)
+    const rawContent = document.content?.trim() || '';
+    const rawSummary = (document as any).aiSummary?.trim() || '';
+    let textContent = rawContent || rawSummary;
 
-    // If no content, try to extract from files
+    // Strip HTML tags from content for cleaner AI input
+    if (textContent && /<[^>]+>/g.test(textContent)) {
+      textContent = textContent
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    // If still no content, report but include the document so frontend can react gracefully
     if (!textContent && document.files.length > 0) {
-      this.logger.log(`No content field, attempting to re-extract text from ${document.files.length} file(s)`);
-
-      // Note: We can't re-extract from stored files without downloading them
-      // This is a limitation - ideally we should store extracted text separately
+      this.logger.log(`No text content for document ${documentId} with ${document.files.length} file(s)`);
       return {
         message: 'Document has files but no extracted text content. Please re-upload files to extract text.',
         files: document.files.length,
+        document,
       };
     }
 
@@ -361,5 +394,71 @@ export class FileUploadService {
       message: 'AI content generated successfully',
       document: updatedDocument,
     };
+  }
+
+  /**
+   * Convert plain text (from OCR or AI) to HTML for CKEditor display.
+   * - Blank line (double newline) -> new paragraph
+   * - Single newline inside paragraph -> line break
+   * - ALL-CAPS short lines -> h2 heading
+   * - Lines starting with dash, bullet, or number -> list item
+   */
+  private plainTextToHtml(plainText: string): string {
+    if (!plainText || plainText.trim() === '') return '';
+
+    const escapeHtml = (str: string) =>
+      str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    const isHeading = (line: string) => {
+      if (line.length < 3 || line.length > 80) return false;
+      const letters = (line.match(/[A-ZÁÉÍÓÚÑa-záéíóúñ]/g) || []).length;
+      const uppers = (line.match(/[A-ZÁÉÍÓÚÑ]/g) || []).length;
+      return letters > 0 && uppers / letters > 0.7;
+    };
+
+    const isListItem = (line: string) =>
+      /^[•\-\*\→]\s+/.test(line) || /^(\d+[\.\)]\s+|[a-z][\.\)]\s+)/i.test(line);
+
+    const formatListItem = (line: string) => {
+      const isNumbered = /^(\d+[\.\)]\s+|[a-z][\.\)]\s+)/i.test(line);
+      const content = line.replace(/^[•\-\*\→]\s+/, '').replace(/^[\da-z]+[\.\)]\s+/i, '');
+      return { content: escapeHtml(content), numbered: isNumbered };
+    };
+
+    // Split into paragraphs by blank lines
+    const rawParagraphs = plainText.split(/\n{2,}/);
+    const htmlParts: string[] = [];
+
+    for (const para of rawParagraphs) {
+      const lines = para.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length === 0) continue;
+
+      // Check if all lines are list items
+      if (lines.every(isListItem)) {
+        const items = lines.map(formatListItem);
+        const isOl = items[0].numbered;
+        const tag = isOl ? 'ol' : 'ul';
+        const liItems = items.map(i => `<li>${i.content}</li>`).join('');
+        htmlParts.push(`<${tag}>${liItems}</${tag}>`);
+        continue;
+      }
+
+      // Single line that is a heading
+      if (lines.length === 1 && isHeading(lines[0])) {
+        htmlParts.push(`<h2>${escapeHtml(lines[0])}</h2>`);
+        continue;
+      }
+
+      // Regular paragraph — join lines with <br> for soft breaks
+      const inner = lines.map(l => escapeHtml(l)).join('<br>');
+      htmlParts.push(`<p>${inner}</p>`);
+    }
+
+    return htmlParts.join('\n');
   }
 }

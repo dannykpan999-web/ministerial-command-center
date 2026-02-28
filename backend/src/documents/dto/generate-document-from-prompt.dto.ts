@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsEnum, IsOptional, MinLength, IsArray, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GenerateDocumentFromPromptDto {
@@ -38,4 +38,14 @@ export class GenerateDocumentFromPromptDto {
   @IsOptional()
   @IsEnum(['es', 'en', 'fr'])
   language?: string = 'es';
+
+  @ApiProperty({
+    description: 'IDs of linked documents to use as context for generation',
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  linkedDocumentIds?: string[];
 }

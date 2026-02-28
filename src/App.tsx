@@ -8,7 +8,9 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { VirtualAssistant } from "@/components/ui/virtual-assistant";
 
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import PublicDocumentView from "./pages/PublicDocumentView";
@@ -61,6 +63,7 @@ const App = () => (
           <AuthProvider>
             <Routes>
               {/* Public routes */}
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/document/:id" element={<PublicDocumentView />} />
@@ -70,10 +73,12 @@ const App = () => (
               {/* Protected routes */}
               <Route element={
                 <AuthGuard>
-                  <MainLayout />
+                  <>
+                    <MainLayout />
+                    <VirtualAssistant />
+                  </>
                 </AuthGuard>
               }>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/inbox" element={<InboxPage />} />
                 <Route path="/inbox/new" element={<NewEntry />} />

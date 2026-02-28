@@ -1,7 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { locales, Locale } from '@/lib/i18n';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { documentsApi } from '@/lib/api/documents.api';
+import {
+  useNotifications,
+  useUnreadNotificationsCount,
+  useMarkAsRead,
+  useMarkAllAsRead,
+  useDeleteNotification,
+  useMuteNotification,
+  useUnmuteNotification,
+  useMuteAllNotifications
+} from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -47,7 +59,6 @@ import {
   LogOut,
   Settings,
   FileText,
-  FolderOpen,
   Clock,
   PenTool,
   AlertTriangle,
@@ -60,76 +71,51 @@ import {
   Shield,
   Loader2,
   Phone,
-  Briefcase
+  Briefcase,
+  Volume2,
+  VolumeX,
+  Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, subHours, subDays } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-interface Notification {
-  id: string;
-  type: 'deadline' | 'signature' | 'document' | 'system';
-  title: string;
-  message: string;
-  time: Date;
-  read: boolean;
-  actionUrl?: string;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: 'n1',
-    type: 'deadline',
-    title: 'Plazo próximo a vencer',
-    message: 'Respuesta a solicitud de ampliación vence en 3 días',
-    time: subHours(new Date(), 1),
-    read: false,
-    actionUrl: '/deadlines',
-  },
-  {
-    id: 'n2',
-    type: 'signature',
-    title: 'Documento pendiente de firma',
-    message: 'Solicitud de ampliación de concesión portuaria requiere su firma',
-    time: subHours(new Date(), 3),
-    read: false,
-    actionUrl: '/signature',
-  },
-  {
-    id: 'n3',
-    type: 'document',
-    title: 'Nuevo documento recibido',
-    message: 'ENT-2024-001542 - Solicitud de ampliación de concesión',
-    time: subDays(new Date(), 1),
-    read: true,
-    actionUrl: '/inbox',
-  },
-  {
-    id: 'n4',
-    type: 'system',
-    title: 'Actualización del sistema',
-    message: 'Se han aplicado mejoras de seguridad al sistema',
-    time: subDays(new Date(), 2),
-    read: true,
-  },
-  {
-    id: 'n5',
-    type: 'deadline',
-    title: 'Plazo vencido',
-    message: 'Entrega documentación portuaria venció hace 2 días',
-    time: subDays(new Date(), 2),
-    read: true,
-    actionUrl: '/deadlines',
-  },
-];
 
 export function TopBar() {
   const { t, locale, setLocale } = useLanguage();
   const { user, logout, updateProfile } = useAuth();
   const [commandOpen, setCommandOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showMuted, setShowMuted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  // Debounce search input 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Keyboard shortcut: Ctrl+K / Cmd+K opens search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  // Fetch real search results from API
+  const { data: searchData, isLoading: isSearching } = useQuery({
+    queryKey: ['global-search', debouncedQuery],
+    queryFn: () => documentsApi.findAll({ search: debouncedQuery, limit: 8 }),
+    enabled: debouncedQuery.trim().length >= 2,
+    staleTime: 30_000,
+  });
+  const searchResults: any[] = searchData?.data ?? [];
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [firstName, setFirstName] = useState('');
@@ -138,6 +124,21 @@ export function TopBar() {
   const [phone, setPhone] = useState('');
   const [position, setPosition] = useState('');
   const navigate = useNavigate();
+
+  // API Hooks - Connect to real backend
+  const { data: notificationsData, isLoading: notificationsLoading } = useNotifications({
+    limit: 20,
+    isRead: showMuted ? undefined : false // Show only unread by default
+  });
+  const { data: unreadCount = 0 } = useUnreadNotificationsCount();
+  const markAsReadMutation = useMarkAsRead();
+  const markAllAsReadMutation = useMarkAllAsRead();
+  const deleteNotificationMutation = useDeleteNotification();
+  const muteNotificationMutation = useMuteNotification();
+  const unmuteNotificationMutation = useUnmuteNotification();
+  const muteAllNotificationsMutation = useMuteAllNotifications();
+
+  const notifications = notificationsData?.data || [];
 
   const userName = user ? `${user.firstName} ${user.lastName}` : 'Usuario';
   const userEmail = user?.email || '';
@@ -238,28 +239,55 @@ export function TopBar() {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const getNotificationIcon = (type: Notification['type']) => {
+  const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'deadline': return <Clock className="h-4 w-4 text-warning" />;
-      case 'signature': return <PenTool className="h-4 w-4 text-primary" />;
-      case 'document': return <FileText className="h-4 w-4 text-info" />;
-      case 'system': return <Settings className="h-4 w-4 text-muted-foreground" />;
+      case 'DEADLINE_REMINDER':
+      case 'DEADLINE_OVERDUE':
+        return <Clock className="h-4 w-4 text-warning" />;
+      case 'SIGNATURE_REQUIRED':
+      case 'SIGNATURE_COMPLETED':
+        return <PenTool className="h-4 w-4 text-primary" />;
+      case 'DOCUMENT_DECREED':
+      case 'DOCUMENT_ASSIGNED':
+        return <FileText className="h-4 w-4 text-info" />;
+      case 'SYSTEM':
+        return <Settings className="h-4 w-4 text-muted-foreground" />;
+      default:
+        return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
-  const handleNotificationClick = (notification: Notification) => {
-    setNotifications(notifications.map(n =>
-      n.id === notification.id ? { ...n, read: true } : n
-    ));
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+  const handleNotificationClick = (notification: any) => {
+    // Mark as read
+    if (!notification.isRead) {
+      markAsReadMutation.mutate(notification.id);
+    }
+
+    // Navigate if there's a related resource
+    if (notification.relatedType === 'document' && notification.relatedId) {
+      navigate(`/inbox`);
+    } else if (notification.relatedType === 'deadline') {
+      navigate('/deadlines');
     }
   };
 
   const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+    markAllAsReadMutation.mutate();
+  };
+
+  const handleMuteNotification = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation(); // Prevent notification click
+    muteNotificationMutation.mutate(notificationId);
+  };
+
+  const handleUnmuteNotification = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation(); // Prevent notification click
+    unmuteNotificationMutation.mutate(notificationId);
+  };
+
+  const handleDeleteNotification = (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation(); // Prevent notification click
+    deleteNotificationMutation.mutate(notificationId);
   };
 
   const toggleDarkMode = () => {
@@ -267,13 +295,9 @@ export function TopBar() {
     document.documentElement.classList.toggle('dark');
   };
 
-  const formatNotificationTime = (date: Date) => {
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return 'Hace unos minutos';
-    if (diffInHours < 24) return `Hace ${diffInHours}h`;
-    return format(date, 'dd MMM', { locale: es });
+  const formatNotificationTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return formatDistanceToNow(date, { addSuffix: true, locale: es });
   };
 
   return (
@@ -355,30 +379,46 @@ export function TopBar() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[calc(100vw-24px)] sm:w-80 p-0 animate-scale-in">
+            <PopoverContent align="end" className="w-[calc(100vw-24px)] sm:w-96 p-0 animate-scale-in">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-semibold text-sm">{t('common.notifications')}</h3>
-                {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllAsRead}>
-                    <span className="hidden sm:inline">Marcar todo como leído</span>
-                    <span className="sm:hidden">Marcar leído</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setShowMuted(!showMuted)}
+                    title={showMuted ? 'Ocultar silenciadas' : 'Mostrar silenciadas'}
+                  >
+                    {showMuted ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
                   </Button>
-                )}
+                  {unreadCount > 0 && (
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllAsRead}>
+                      <span className="hidden sm:inline">Marcar leído</span>
+                      <CheckCircle className="sm:hidden h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <ScrollArea className="h-[280px] sm:h-[320px]">
-                {notifications.length === 0 ? (
+              <ScrollArea className="h-[280px] sm:h-[360px]">
+                {notificationsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 mb-2 animate-spin" />
+                    <p className="text-sm">Cargando notificaciones...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-muted-foreground animate-fade-in">
                     <Bell className="h-8 w-8 mb-2 opacity-50 animate-float" />
                     <p className="text-sm">Sin notificaciones</p>
                   </div>
                 ) : (
                   <div className="divide-y stagger-children">
-                    {notifications.map(notification => (
+                    {notifications.map((notification: any) => (
                       <div
                         key={notification.id}
-                        className={`flex gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-all duration-200 active:scale-[0.98] ${
-                          !notification.read ? 'bg-primary/5' : ''
-                        }`}
+                        className={`group flex gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-all duration-200 ${
+                          !notification.isRead ? 'bg-primary/5' : ''
+                        } ${notification.isMuted ? 'opacity-50' : ''}`}
                         onClick={() => handleNotificationClick(notification)}
                       >
                         <div className="shrink-0 mt-0.5">
@@ -386,19 +426,58 @@ export function TopBar() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className={`text-sm ${!notification.read ? 'font-medium' : ''}`}>
+                            <p className={`text-sm ${!notification.isRead ? 'font-medium' : ''}`}>
                               {notification.title}
                             </p>
-                            {!notification.read && (
-                              <span className="shrink-0 h-2 w-2 rounded-full bg-primary mt-1.5 animate-pulse" />
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {!notification.isRead && (
+                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                              )}
+                              {notification.isMuted && (
+                                <VolumeX className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </div>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                             {notification.message}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatNotificationTime(notification.time)}
-                          </p>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <p className="text-xs text-muted-foreground">
+                              {formatNotificationTime(notification.createdAt)}
+                            </p>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {notification.isMuted ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => handleUnmuteNotification(e, notification.id)}
+                                  title="Reactivar notificación"
+                                >
+                                  <Volume2 className="h-3 w-3" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => handleMuteNotification(e, notification.id)}
+                                  title="Silenciar notificación"
+                                >
+                                  <VolumeX className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive"
+                                onClick={(e) => handleDeleteNotification(e, notification.id)}
+                                title="Eliminar notificación"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -467,31 +546,74 @@ export function TopBar() {
         </div>
       </header>
 
-      {/* Command palette */}
-      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
-        <CommandInput placeholder={t('common.search_placeholder')} />
+      {/* Command palette — real search */}
+      <CommandDialog
+        open={commandOpen}
+        onOpenChange={(open) => {
+          setCommandOpen(open);
+          if (!open) { setSearchQuery(''); setDebouncedQuery(''); }
+        }}
+      >
+        <CommandInput
+          placeholder="Buscar por título, número, entidad, responsable…"
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+        />
         <CommandList>
-          <CommandEmpty>{t('common.no_results')}</CommandEmpty>
-          <CommandGroup heading="Documentos">
-            <CommandItem onSelect={() => { navigate('/inbox'); setCommandOpen(false); }}>
-              <FileText className="mr-2 h-4 w-4" />
-              <span>ENT-2024-001542 - Solicitud de ampliación</span>
-            </CommandItem>
-            <CommandItem onSelect={() => { navigate('/inbox'); setCommandOpen(false); }}>
-              <FileText className="mr-2 h-4 w-4" />
-              <span>ENT-2024-001541 - Informe trimestral</span>
-            </CommandItem>
-          </CommandGroup>
-          <CommandGroup heading="Expedientes">
-            <CommandItem onSelect={() => { navigate('/cases/exp1'); setCommandOpen(false); }}>
-              <FolderOpen className="mr-2 h-4 w-4" />
-              <span>EXP-2024-00342 - Renovación Terminal Norte</span>
-            </CommandItem>
-            <CommandItem onSelect={() => { navigate('/cases/exp2'); setCommandOpen(false); }}>
-              <FolderOpen className="mr-2 h-4 w-4" />
-              <span>EXP-2024-00341 - Licitación 5G</span>
-            </CommandItem>
-          </CommandGroup>
+          {/* Waiting for the user to type */}
+          {debouncedQuery.trim().length < 2 && (
+            <CommandEmpty className="py-8 text-center text-sm text-muted-foreground">
+              Escribe al menos 2 caracteres para buscar…
+            </CommandEmpty>
+          )}
+
+          {/* Loading */}
+          {isSearching && debouncedQuery.trim().length >= 2 && (
+            <CommandEmpty className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Buscando…
+            </CommandEmpty>
+          )}
+
+          {/* No results */}
+          {!isSearching && debouncedQuery.trim().length >= 2 && searchResults.length === 0 && (
+            <CommandEmpty>
+              Sin resultados para "{debouncedQuery}"
+            </CommandEmpty>
+          )}
+
+          {/* Real results */}
+          {searchResults.length > 0 && (
+            <CommandGroup heading={`Documentos (${searchResults.length} resultado${searchResults.length !== 1 ? 's' : ''})`}>
+              {searchResults.map((doc: any) => {
+                const destination = doc.direction === 'OUT' ? '/outbox' : '/inbox';
+                const responsible = doc.responsible
+                  ? `${doc.responsible.firstName} ${doc.responsible.lastName}`
+                  : null;
+                const entityName = doc.entity?.name ?? null;
+                return (
+                  <CommandItem
+                    key={doc.id}
+                    value={`${doc.correlativeNumber} ${doc.title} ${entityName ?? ''} ${responsible ?? ''}`}
+                    onSelect={() => { navigate(destination); setCommandOpen(false); setSearchQuery(''); }}
+                    className="flex items-start gap-3 py-3"
+                  >
+                    <FileText className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium text-sm truncate">{doc.title}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+                        <span className="font-mono">{doc.correlativeNumber}</span>
+                        {entityName && <><span>·</span><span className="truncate">{entityName}</span></>}
+                        {responsible && <><span>·</span><span className="truncate">{responsible}</span></>}
+                        <span>·</span>
+                        <span>{doc.direction === 'OUT' ? 'Salida' : 'Entrada'}</span>
+                      </span>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          )}
         </CommandList>
       </CommandDialog>
 

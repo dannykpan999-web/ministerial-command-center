@@ -43,4 +43,22 @@ export const notificationsApi = {
     const response = await axiosInstance.delete('/notifications/read/all');
     return response.data;
   },
+
+  // Mute notification
+  muteNotification: async (id: string) => {
+    const response = await axiosInstance.patch(`/notifications/${id}/mute`);
+    return response.data;
+  },
+
+  // Unmute notification
+  unmuteNotification: async (id: string) => {
+    const response = await axiosInstance.patch(`/notifications/${id}/unmute`);
+    return response.data;
+  },
+
+  // Mute all notifications
+  muteAllNotifications: async () => {
+    const response = await axiosInstance.patch('/notifications/mute-all');
+    return response.data;
+  },
 };

@@ -1,12 +1,16 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AIDocumentGeneratorService {
   private openai: OpenAI;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+  ) {
     this.openai = new OpenAI({
       apiKey: this.configService.get<string>('OPENAI_API_KEY'),
     });
@@ -19,6 +23,7 @@ export class AIDocumentGeneratorService {
     documentType: string,
     prompt: string,
     tone: string = 'formal',
+    linkedDocumentIds?: string[],
   ): Promise<{ content: string; title: string; metadata: any }> {
     if (!prompt || prompt.trim().length < 10) {
       throw new BadRequestException(
@@ -118,6 +123,21 @@ Utiliza un lenguaje formal pero más cercano que un oficio, apropiado para relac
     const temperature =
       tone === 'very_formal' ? 0.3 : tone === 'internal' ? 0.5 : 0.4;
 
+    // Build enriched prompt with linked document context
+    let enrichedPrompt = prompt;
+    if (linkedDocumentIds && linkedDocumentIds.length > 0) {
+      const linkedDocs = await this.prisma.document.findMany({
+        where: { id: { in: linkedDocumentIds } },
+        select: { correlativeNumber: true, title: true, content: true },
+      });
+      if (linkedDocs.length > 0) {
+        const contextBlock = linkedDocs
+          .map(d => `[${d.correlativeNumber}] ${d.title}\n${d.content ? d.content.substring(0, 800) : '(sin contenido)'}`)
+          .join('\n\n---\n\n');
+        enrichedPrompt = `DOCUMENTOS DE CONTEXTO:\n${contextBlock}\n\n---\n\nSOLICITUD: ${prompt}`;
+      }
+    }
+
     try {
       // Generate document content
       const contentResponse = await this.openai.chat.completions.create({
@@ -129,7 +149,7 @@ Utiliza un lenguaje formal pero más cercano que un oficio, apropiado para relac
           },
           {
             role: 'user',
-            content: prompt,
+            content: enrichedPrompt,
           },
         ],
         max_tokens: 2500,
@@ -249,14 +269,24 @@ Proporciona un análisis profesional, objetivo y útil para toma de decisiones r
           },
           {
             role: 'user',
-            content: `Analiza el siguiente documento y proporciona tu análisis en formato JSON con las siguientes claves:
-            "summary" (string), "keyTopics" (array de strings), "requiredActions" (array de strings),
-            "urgencyLevel" (string: "ALTA", "MEDIA", o "BAJA"), "stakeholders" (array de strings).\n\n
-            Documento:\n${content}`,
+            content: `Analiza el siguiente documento y proporciona tu análisis ÚNICAMENTE en formato JSON válido con las siguientes claves:
+
+{
+  "summary": "Resumen ejecutivo en 2-3 párrafos",
+  "keyTopics": ["Tema 1", "Tema 2", "Tema 3"],
+  "requiredActions": ["Acción 1", "Acción 2", "Acción 3"],
+  "urgencyLevel": "ALTA" | "MEDIA" | "BAJA",
+  "stakeholders": ["Parte interesada 1", "Parte interesada 2"]
+}
+
+IMPORTANTE: Responde SOLO con el objeto JSON, sin texto adicional, sin markdown, sin explicaciones.
+
+Documento:\n${content}`,
           },
         ],
         max_tokens: 1500,
         temperature: 0.3,
+        response_format: { type: 'json_object' },
       });
 
       const responseContent =
@@ -276,17 +306,43 @@ Proporciona un análisis profesional, objetivo y útil para toma de decisiones r
           .trim();
         analysis = JSON.parse(jsonContent);
       } catch (parseError) {
-        // If JSON parsing fails, create a structured response from the text
+        // If JSON parsing fails, try to extract structured data from text
         console.warn(
-          'Could not parse AI response as JSON, using text format:',
-          parseError,
+          'Could not parse AI response as JSON, attempting text extraction',
         );
+
+        // Extract summary (first paragraph or first few sentences)
+        const summaryMatch = responseContent.match(/(?:Resumen|Summary)[:\s]*([^\n]+(?:\n[^\n]+)*?)(?:\n\n|\n[A-Z]|$)/i);
+        const summary = summaryMatch ? summaryMatch[1].trim() : responseContent.substring(0, 500);
+
+        // Extract key topics (look for bullet points or numbered lists)
+        const keyTopicsMatch = responseContent.match(/(?:Temas? [Cc]lave|Key Topics?)[:\s]*((?:\n?[-•*\d.]\s*[^\n]+)+)/i);
+        const keyTopics = keyTopicsMatch
+          ? keyTopicsMatch[1].split('\n').filter(line => line.trim()).map(line => line.replace(/^[-•*\d.]\s*/, '').trim())
+          : [];
+
+        // Extract required actions (look for bullet points or numbered lists)
+        const actionsMatch = responseContent.match(/(?:Acciones? [Rr]equeridas?|Required Actions?)[:\s]*((?:\n?[-•*\d.]\s*[^\n]+)+)/i);
+        const requiredActions = actionsMatch
+          ? actionsMatch[1].split('\n').filter(line => line.trim()).map(line => line.replace(/^[-•*\d.]\s*/, '').trim())
+          : [];
+
+        // Extract urgency level
+        const urgencyMatch = responseContent.match(/(?:Urgencia|Urgency)[:\s]*(ALTA|MEDIA|BAJA|HIGH|MEDIUM|LOW)/i);
+        const urgencyLevel = urgencyMatch ? urgencyMatch[1].toUpperCase().replace('HIGH', 'ALTA').replace('MEDIUM', 'MEDIA').replace('LOW', 'BAJA') : 'MEDIA';
+
+        // Extract stakeholders
+        const stakeholdersMatch = responseContent.match(/(?:Partes [Ii]nteresadas?|Stakeholders?)[:\s]*((?:\n?[-•*\d.]\s*[^\n]+)+)/i);
+        const stakeholders = stakeholdersMatch
+          ? stakeholdersMatch[1].split('\n').filter(line => line.trim()).map(line => line.replace(/^[-•*\d.]\s*/, '').trim())
+          : [];
+
         analysis = {
-          summary: responseContent,
-          keyTopics: [],
-          requiredActions: [],
-          urgencyLevel: 'MEDIA',
-          stakeholders: [],
+          summary,
+          keyTopics,
+          requiredActions,
+          urgencyLevel,
+          stakeholders,
         };
       }
 

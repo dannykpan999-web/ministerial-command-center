@@ -18,6 +18,10 @@ import { FilesModule } from './files/files.module';
 import { DeadlinesModule } from './deadlines/deadlines.module';
 import { ExpedientesModule } from './expedientes/expedientes.module';
 import { WorkflowModule } from './workflow/workflow.module';
+import { AssistantModule } from './assistant/assistant.module';
+import { SignatureFlowsModule } from './signature-flows/signature-flows.module';
+import { TemplatesModule } from './templates/templates.module';
+import { ArticlesModule } from './articles/articles.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -60,6 +64,14 @@ import { AppController } from './app.controller';
     ExpedientesModule,
     // Workflow System (Global)
     WorkflowModule,
+    // Virtual Assistant (Global)
+    AssistantModule,
+    // Signature Flows
+    SignatureFlowsModule,
+    // Document Templates
+    TemplatesModule,
+    // Content Articles
+    ArticlesModule,
   ],
   controllers: [AppController],
   providers: [],

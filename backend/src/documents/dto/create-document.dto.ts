@@ -109,4 +109,53 @@ export class CreateDocumentDto {
   @ApiPropertyOptional({ description: 'Sent at timestamp' })
   @IsOptional()
   sentAt?: Date;
+
+  // Decreto Ministerial specific fields
+  @ApiPropertyOptional({ description: 'Whether this is a decreto ministerial', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isDecreto?: boolean;
+
+  @ApiPropertyOptional({ description: 'Considerandos (considerations) for decreto', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  considerandos?: string[];
+
+  @ApiPropertyOptional({ description: 'Articulado (articles) for decreto', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  articulado?: string[];
+
+  @ApiPropertyOptional({ description: 'Disposiciones transitorias (transitional provisions)', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  disposiciones?: string[];
+
+  @ApiPropertyOptional({ description: 'Vigencia (validity/effective date) for decreto' })
+  @IsOptional()
+  vigencia?: Date;
+
+  // Official PDF header fields
+  @ApiPropertyOptional({ description: 'Sub-department e.g. Dirección General de Puertos' })
+  @IsString()
+  @IsOptional()
+  subDepartment?: string;
+
+  @ApiPropertyOptional({ description: 'Reference/section code e.g. Puerto Privados' })
+  @IsString()
+  @IsOptional()
+  referenceCode?: string;
+
+  @ApiPropertyOptional({ description: 'Signer title e.g. El Director General' })
+  @IsString()
+  @IsOptional()
+  signerTitle?: string;
+
+  @ApiPropertyOptional({ description: 'Recipient full title for footer' })
+  @IsString()
+  @IsOptional()
+  recipientTitle?: string;
 }

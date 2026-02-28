@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { locales, Locale } from '@/lib/i18n';
 import { PageHeader } from '@/components/ui/page-header';
@@ -14,6 +14,18 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
+  usePreferences,
+  useUpdatePreferences
+} from '@/hooks/usePreferences';
+import {
+  useTemplates,
+  useCreateTemplate,
+  useUpdateTemplate,
+  useDeleteTemplate,
+  useDuplicateTemplate,
+} from '@/hooks/useTemplates';
+import { TemplateType, DocumentTemplate } from '@/lib/api/templates.api';
+import {
   Users,
   FileText,
   Globe,
@@ -28,7 +40,8 @@ import {
   MoreVertical,
   Mail,
   FileInput,
-  FileOutput
+  FileOutput,
+  Loader2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -88,63 +101,117 @@ const initialTemplates: Template[] = [
   },
 ];
 
-const templateTypes = {
-  oficio: { label: 'Oficio', icon: FileOutput, color: 'text-blue-600' },
-  memorando: { label: 'Memorando', icon: FileInput, color: 'text-purple-600' },
-  circular: { label: 'Circular', icon: Mail, color: 'text-green-600' },
-  respuesta: { label: 'Respuesta', icon: FileText, color: 'text-orange-600' },
+const templateTypes: Record<TemplateType, { label: string; icon: any; color: string }> = {
+  [TemplateType.OFICIO]: { label: 'Oficio', icon: FileOutput, color: 'text-blue-600' },
+  [TemplateType.MEMORANDO]: { label: 'Memorando', icon: FileInput, color: 'text-purple-600' },
+  [TemplateType.CIRCULAR]: { label: 'Circular', icon: Mail, color: 'text-green-600' },
+  [TemplateType.RESPUESTA]: { label: 'Respuesta', icon: FileText, color: 'text-orange-600' },
+  [TemplateType.DECRETO]: { label: 'Decreto', icon: Shield, color: 'text-red-600' },
+  [TemplateType.RESOLUCION]: { label: 'Resolución', icon: PenTool, color: 'text-indigo-600' },
 };
 
 export default function SettingsPage() {
   const { t, locale, setLocale } = useLanguage();
   const { toast } = useToast();
-  const [templates, setTemplates] = useState<Template[]>(initialTemplates);
+
+  // API Hooks - Real backend data
+  const { data: preferences, isLoading: prefsLoading } = usePreferences();
+  const { data: templates = [], isLoading: templatesLoading } = useTemplates();
+  const updatePreferencesMutation = useUpdatePreferences();
+  const createTemplateMutation = useCreateTemplate();
+  const updateTemplateMutation = useUpdateTemplate();
+  const deleteTemplateMutation = useDeleteTemplate();
+  const duplicateTemplateMutation = useDuplicateTemplate();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
-  const [editType, setEditType] = useState<Template['type']>('oficio');
+  const [editType, setEditType] = useState<TemplateType>(TemplateType.OFICIO);
   const [editContent, setEditContent] = useState('');
+  const [customVariable, setCustomVariable] = useState('');
+
+  // Textarea ref for cursor position
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleCreateTemplate = () => {
     setEditName('');
-    setEditType('oficio');
+    setEditType(TemplateType.OFICIO);
     setEditContent('');
+    setCustomVariable('');
     setIsCreating(true);
     setIsEditing(true);
   };
 
-  const handleEditTemplate = (template: Template) => {
+  const handleEditTemplate = (template: DocumentTemplate) => {
     setEditingTemplate(template);
     setEditName(template.name);
     setEditType(template.type);
     setEditContent(template.content);
+    setCustomVariable('');
     setIsCreating(false);
     setIsEditing(true);
   };
 
-  const handleDuplicateTemplate = (template: Template) => {
-    const newTemplate: Template = {
-      ...template,
-      id: `t${Date.now()}`,
-      name: `${template.name} (copia)`,
-      isDefault: false,
-    };
-    setTemplates([...templates, newTemplate]);
+  // Insert variable at cursor position
+  const handleInsertVariable = (variableName: string) => {
+    const textarea = contentTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const variable = `{{${variableName}}}`;
+
+    const newContent = editContent.substring(0, start) + variable + editContent.substring(end);
+    setEditContent(newContent);
+
+    // Set cursor position after inserted variable
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + variable.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+
     toast({
-      title: 'Plantilla duplicada',
-      description: 'Se ha creado una copia de la plantilla',
+      title: 'Variable insertada',
+      description: `{{${variableName}}} agregado al contenido`,
     });
   };
 
+  // Insert custom variable
+  const handleInsertCustomVariable = () => {
+    if (!customVariable.trim()) {
+      toast({
+        title: 'Variable vacía',
+        description: 'Por favor ingresa un nombre para la variable',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate variable name (only letters, numbers, underscores)
+    const validName = /^[a-zA-Z0-9_]+$/.test(customVariable);
+    if (!validName) {
+      toast({
+        title: 'Nombre inválido',
+        description: 'Solo usa letras, números y guiones bajos (_)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    handleInsertVariable(customVariable);
+    setCustomVariable('');
+  };
+
+  const handleDuplicateTemplate = (templateId: string) => {
+    duplicateTemplateMutation.mutate(templateId);
+  };
+
   const handleDeleteTemplate = (id: string) => {
-    setTemplates(templates.filter(t => t.id !== id));
-    toast({
-      title: 'Plantilla eliminada',
-      description: 'La plantilla ha sido eliminada correctamente',
-    });
+    deleteTemplateMutation.mutate(id);
   };
 
   const handleSaveTemplate = () => {
@@ -157,38 +224,30 @@ export default function SettingsPage() {
       return;
     }
 
-    // Extract variables from content ({{variable}})
-    const variableMatches = editContent.match(/\{\{(\w+)\}\}/g) || [];
-    const variables = [...new Set(variableMatches.map(v => v.replace(/\{\{|\}\}/g, '')))];
-
     if (isCreating) {
-      const newTemplate: Template = {
-        id: `t${Date.now()}`,
+      createTemplateMutation.mutate({
         name: editName,
         type: editType,
         content: editContent,
-        variables,
-        isDefault: false,
-      };
-      setTemplates([...templates, newTemplate]);
-      toast({
-        title: 'Plantilla creada',
-        description: 'La plantilla ha sido creada correctamente',
       });
     } else if (editingTemplate) {
-      setTemplates(templates.map(t =>
-        t.id === editingTemplate.id
-          ? { ...t, name: editName, type: editType, content: editContent, variables }
-          : t
-      ));
-      toast({
-        title: 'Plantilla actualizada',
-        description: 'Los cambios han sido guardados',
+      updateTemplateMutation.mutate({
+        id: editingTemplate.id,
+        dto: {
+          name: editName,
+          type: editType,
+          content: editContent,
+        },
       });
     }
 
     setIsEditing(false);
     setEditingTemplate(null);
+  };
+
+  // Handle preference updates
+  const handlePreferenceChange = (key: string, value: any) => {
+    updatePreferencesMutation.mutate({ [key]: value });
   };
 
   return (
@@ -250,11 +309,16 @@ export default function SettingsPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {templates.map(template => {
-                  const TypeIcon = templateTypes[template.type].icon;
-                  return (
-                    <div
+              {templatesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {templates.map(template => {
+                    const TypeIcon = templateTypes[template.type].icon;
+                    return (
+                      <div
                       key={template.id}
                       className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/30 transition-colors"
                     >
@@ -288,7 +352,7 @@ export default function SettingsPage() {
                             <Edit className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDuplicateTemplate(template)}>
+                          <DropdownMenuItem onClick={() => handleDuplicateTemplate(template.id)}>
                             <Copy className="h-4 w-4 mr-2" />
                             Duplicar
                           </DropdownMenuItem>
@@ -306,7 +370,8 @@ export default function SettingsPage() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              )}
 
               <div className="mt-6 p-4 bg-muted/30 rounded-lg">
                 <h4 className="text-sm font-medium mb-2">Variables disponibles</h4>
@@ -351,7 +416,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="template-type">Tipo de documento</Label>
-                    <Select value={editType} onValueChange={(v) => setEditType(v as Template['type'])}>
+                    <Select value={editType} onValueChange={(v) => setEditType(v as TemplateType)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -367,6 +432,7 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="template-content">Contenido de la plantilla</Label>
                   <Textarea
+                    ref={contentTextareaRef}
                     id="template-content"
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
@@ -374,19 +440,82 @@ export default function SettingsPage() {
                     className="min-h-[300px] font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Usa {'{{variable}}'} para crear campos dinámicos. Ejemplo: {'{{destinatario}}'}, {'{{fecha}}'}
+                    Haz clic en las variables de abajo para insertarlas en el contenido
                   </p>
                 </div>
 
+                {/* Variable Picker - Clickable Badges */}
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Variables disponibles</h4>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">Haz clic para insertar en el cursor</p>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {[...new Set((editContent.match(/\{\{(\w+)\}\}/g) || []).map(v => v.replace(/\{\{|\}\}/g, '')))].length} usadas
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {['numero', 'fecha', 'ciudad', 'destinatario', 'cargo_destinatario', 'remitente', 'asunto', 'contenido', 'firmante', 'cargo_firmante'].map(v => (
+                      <Badge
+                        key={v}
+                        variant="outline"
+                        className="text-xs font-mono cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 hover:border-blue-400 dark:hover:border-blue-600 transition-all hover:scale-105 active:scale-95"
+                        onClick={() => handleInsertVariable(v)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        {`{{${v}}}`}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  {/* Custom Variable Input */}
+                  <div className="border-t border-blue-200 dark:border-blue-800 pt-3 mt-3">
+                    <Label className="text-xs text-blue-900 dark:text-blue-100 mb-2 block">
+                      Variable personalizada
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={customVariable}
+                        onChange={(e) => setCustomVariable(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleInsertCustomVariable();
+                          }
+                        }}
+                        placeholder="nombre_variable"
+                        className="flex-1 h-8 text-xs font-mono"
+                      />
+                      <Button
+                        onClick={handleInsertCustomVariable}
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 px-3"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Insertar
+                      </Button>
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1.5">
+                      Solo letras, números y guiones bajos (_)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Detected Variables */}
                 {editContent && (
                   <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs font-medium mb-2">Variables detectadas:</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-medium mb-2">✓ Variables detectadas en el contenido:</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {[...new Set((editContent.match(/\{\{(\w+)\}\}/g) || []).map(v => v.replace(/\{\{|\}\}/g, '')))].map(v => (
-                        <Badge key={v} variant="secondary" className="text-xs font-mono">{v}</Badge>
+                        <Badge key={v} variant="secondary" className="text-xs font-mono bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100">
+                          {v}
+                        </Badge>
                       ))}
                       {!(editContent.match(/\{\{(\w+)\}\}/g) || []).length && (
-                        <span className="text-xs text-muted-foreground">Ninguna variable detectada</span>
+                        <span className="text-xs text-muted-foreground">Ninguna variable detectada aún</span>
                       )}
                     </div>
                   </div>
@@ -414,30 +543,53 @@ export default function SettingsPage() {
               <CardTitle className="text-base">Idioma de la interfaz</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(locales).map(([code, name]) => (
-                    <SelectItem key={code} value={code}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="space-y-2">
-                <Label>{t('settings.timezone')}</Label>
-                <Select defaultValue="utc-5">
-                  <SelectTrigger className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="utc-5">UTC-5 (América/Lima)</SelectItem>
-                    <SelectItem value="utc-6">UTC-6 (América/México)</SelectItem>
-                    <SelectItem value="utc-3">UTC-3 (América/Buenos Aires)</SelectItem>
-                    <SelectItem value="utc+1">UTC+1 (Europa/Madrid)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {prefsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Idioma</Label>
+                    <Select
+                      value={preferences?.language || locale}
+                      onValueChange={(v) => {
+                        setLocale(v as Locale);
+                        handlePreferenceChange('language', v);
+                      }}
+                      disabled={updatePreferencesMutation.isPending}
+                    >
+                      <SelectTrigger className="w-64">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(locales).map(([code, name]) => (
+                          <SelectItem key={code} value={code}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('settings.timezone')}</Label>
+                    <Select
+                      value={preferences?.timezone || 'Africa/Malabo'}
+                      onValueChange={(v) => handlePreferenceChange('timezone', v)}
+                      disabled={updatePreferencesMutation.isPending}
+                    >
+                      <SelectTrigger className="w-64">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Africa/Malabo">África/Malabo (Guinea Ecuatorial)</SelectItem>
+                        <SelectItem value="Europe/Madrid">Europa/Madrid (UTC+1)</SelectItem>
+                        <SelectItem value="America/Lima">América/Lima (UTC-5)</SelectItem>
+                        <SelectItem value="America/Mexico_City">América/Ciudad de México (UTC-6)</SelectItem>
+                        <SelectItem value="America/Buenos_Aires">América/Buenos Aires (UTC-3)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -448,34 +600,58 @@ export default function SettingsPage() {
               <CardTitle className="text-base">{t('settings.alerts')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Recordar 48h antes del vencimiento</Label>
-                  <p className="text-sm text-muted-foreground">Enviar recordatorio automático</p>
+              {prefsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Escalar plazos vencidos</Label>
-                  <p className="text-sm text-muted-foreground">Notificar al supervisor</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Notificaciones por correo</Label>
-                  <p className="text-sm text-muted-foreground">Recibir alertas por email</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Resumen diario</Label>
-                  <p className="text-sm text-muted-foreground">Recibir resumen de actividad cada mañana</p>
-                </div>
-                <Switch />
-              </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Recordar 48h antes del vencimiento</Label>
+                      <p className="text-sm text-muted-foreground">Enviar recordatorio automático</p>
+                    </div>
+                    <Switch
+                      checked={preferences?.reminder48hBefore ?? true}
+                      onCheckedChange={(checked) => handlePreferenceChange('reminder48hBefore', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Escalar plazos vencidos</Label>
+                      <p className="text-sm text-muted-foreground">Notificar al supervisor</p>
+                    </div>
+                    <Switch
+                      checked={preferences?.escalateOverdue ?? true}
+                      onCheckedChange={(checked) => handlePreferenceChange('escalateOverdue', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Notificaciones por correo</Label>
+                      <p className="text-sm text-muted-foreground">Recibir alertas por email</p>
+                    </div>
+                    <Switch
+                      checked={preferences?.emailNotifications ?? true}
+                      onCheckedChange={(checked) => handlePreferenceChange('emailNotifications', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Resumen diario</Label>
+                      <p className="text-sm text-muted-foreground">Recibir resumen de actividad cada mañana</p>
+                    </div>
+                    <Switch
+                      checked={preferences?.dailySummary ?? false}
+                      onCheckedChange={(checked) => handlePreferenceChange('dailySummary', checked)}
+                      disabled={updatePreferencesMutation.isPending}
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { documentsApi, type QueryDocumentDto, type CreateDocumentDto, type UpdateDocumentDto, type DecreeDocumentDto, type AssignDocumentDto } from '@/lib/api';
+import { documentsApi, type QueryDocumentDto, type CreateDocumentDto, type UpdateDocumentDto, type DecreeDocumentDto, type AssignDocumentDto, type CreateDocumentFromTemplateDto } from '@/lib/api';
 import { toast } from 'sonner';
 
 // Query keys
@@ -99,7 +99,7 @@ export const useUpdateDocument = () => {
       documentsApi.update(id, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: documentKeys.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: documentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.all });
       toast.success('Documento actualizado exitosamente');
     },
     onError: (error: any) => {
@@ -174,6 +174,29 @@ export const useDeleteDocument = () => {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al eliminar documento');
+    },
+  });
+};
+
+// Create document from template
+export const useCreateDocumentFromTemplate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateDocumentFromTemplateDto) => documentsApi.createFromTemplate(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: documentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.inbox() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.outbox() });
+      queryClient.invalidateQueries({ queryKey: documentKeys.stats() });
+      toast.success('Documento creado desde plantilla', {
+        description: `Documento ${data.documentNumber} generado exitosamente`,
+      });
+    },
+    onError: (error: any) => {
+      toast.error('Error al crear documento', {
+        description: error.response?.data?.message || 'No se pudo generar el documento desde la plantilla',
+      });
     },
   });
 };

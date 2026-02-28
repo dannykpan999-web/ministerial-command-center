@@ -28,6 +28,7 @@ import { RestoreFileVersionDto } from './dto/file-version.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { createReadStream, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -251,6 +252,7 @@ export class FilesController {
    * This endpoint handles URLs like /api/files/serve/documents/id/file.pdf
    * Uses wildcard to handle nested directory structures
    */
+  @Public()
   @Get('serve/*')
   @ApiOperation({ summary: 'Serve uploaded files from storage' })
   @ApiResponse({

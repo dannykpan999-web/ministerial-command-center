@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 
 export interface NotificationPayload {
   type: 'DOCUMENT_DECREED' | 'DOCUMENT_ASSIGNED' | 'STATUS_CHANGED' | 'COMMENT_ADDED' | 'SIGNATURE_REQUIRED' | 'DEADLINE_REMINDER';
-  documentId: number;
+  documentId: string | null;
   title: string;
   message: string;
   timestamp: Date;
@@ -15,7 +15,7 @@ export interface NotificationPayload {
 export class WebSocketService {
   private server: Server;
   private readonly logger = new Logger(WebSocketService.name);
-  private userSockets = new Map<number, Set<string>>(); // userId -> Set of socket IDs
+  private userSockets = new Map<string, Set<string>>(); // userId (CUID string) -> Set of socket IDs
 
   setServer(server: Server) {
     this.server = server;
@@ -23,7 +23,7 @@ export class WebSocketService {
   }
 
   // Register a user's socket connection
-  registerUserSocket(userId: number, socketId: string) {
+  registerUserSocket(userId: string, socketId: string) {
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
@@ -32,7 +32,7 @@ export class WebSocketService {
   }
 
   // Unregister a user's socket connection
-  unregisterUserSocket(userId: number, socketId: string) {
+  unregisterUserSocket(userId: string, socketId: string) {
     const sockets = this.userSockets.get(userId);
     if (sockets) {
       sockets.delete(socketId);
@@ -44,7 +44,7 @@ export class WebSocketService {
   }
 
   // Send notification to a specific user (all their connected sockets)
-  sendNotificationToUser(userId: number, notification: NotificationPayload) {
+  sendNotificationToUser(userId: string, notification: NotificationPayload) {
     const sockets = this.userSockets.get(userId);
     if (!sockets || sockets.size === 0) {
       this.logger.debug(`User ${userId} has no active connections`);
@@ -59,7 +59,7 @@ export class WebSocketService {
   }
 
   // Send notification to multiple users
-  sendNotificationToUsers(userIds: number[], notification: NotificationPayload) {
+  sendNotificationToUsers(userIds: string[], notification: NotificationPayload) {
     userIds.forEach((userId) => {
       this.sendNotificationToUser(userId, notification);
     });
@@ -72,7 +72,7 @@ export class WebSocketService {
   }
 
   // Get number of active connections for a user
-  getUserConnectionCount(userId: number): number {
+  getUserConnectionCount(userId: string): number {
     return this.userSockets.get(userId)?.size || 0;
   }
 
@@ -82,7 +82,7 @@ export class WebSocketService {
   }
 
   // Get all connected user IDs
-  getConnectedUserIds(): number[] {
+  getConnectedUserIds(): string[] {
     return Array.from(this.userSockets.keys());
   }
 }

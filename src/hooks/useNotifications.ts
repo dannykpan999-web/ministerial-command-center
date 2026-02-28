@@ -80,3 +80,60 @@ export const useDeleteAllReadNotifications = () => {
     },
   });
 };
+
+// Mute notification mutation
+export const useMuteNotification = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => notificationsApi.muteNotification(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      toast.success('Notificación silenciada');
+    },
+    onError: (error: any) => {
+      toast.error('Error al silenciar notificación', {
+        description: error.message || 'No se pudo silenciar la notificación',
+      });
+    },
+  });
+};
+
+// Unmute notification mutation
+export const useUnmuteNotification = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => notificationsApi.unmuteNotification(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      toast.success('Notificación reactivada');
+    },
+    onError: (error: any) => {
+      toast.error('Error al reactivar notificación', {
+        description: error.message || 'No se pudo reactivar la notificación',
+      });
+    },
+  });
+};
+
+// Mute all notifications mutation
+export const useMuteAllNotifications = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => notificationsApi.muteAllNotifications(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      toast.success('Todas las notificaciones silenciadas');
+    },
+    onError: (error: any) => {
+      toast.error('Error al silenciar notificaciones', {
+        description: error.message || 'No se pudieron silenciar las notificaciones',
+      });
+    },
+  });
+};

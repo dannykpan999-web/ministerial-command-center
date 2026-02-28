@@ -97,7 +97,16 @@ export function DocumentStageProgress({
   showPercentage = true,
   size = 'md',
 }: DocumentStageProgressProps) {
+  // Return null if required props are missing
+  if (!direction || !currentStage) {
+    return null;
+  }
+
   const stages = STAGE_ORDER[direction];
+  if (!stages) {
+    return null;
+  }
+
   const currentIndex = stages.indexOf(currentStage);
   const progress = ((currentIndex + 1) / stages.length) * 100;
   const stageLabel = STAGE_LABELS[currentStage as keyof typeof STAGE_LABELS] || currentStage;

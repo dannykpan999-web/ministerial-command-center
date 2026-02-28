@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto, NotificationType } from './dto/create-notification.dto';
 import { QueryNotificationDto } from './dto/query-notification.dto';
@@ -83,9 +83,9 @@ export class NotificationsService {
     });
 
     // Send real-time WebSocket notification
-    this.websocketService.sendNotificationToUser(parseInt(dto.userId), {
+    this.websocketService.sendNotificationToUser(dto.userId, {
       type: this.mapNotificationTypeToWebSocket(dto.type),
-      documentId: dto.relatedId ? parseInt(dto.relatedId) : null,
+      documentId: dto.relatedId || null,
       title: dto.title,
       message: dto.message,
       timestamp: notification.createdAt,
@@ -150,13 +150,14 @@ export class NotificationsService {
   }
 
   /**
-   * Get unread notification count for a user
+   * Get unread notification count for a user (excluding muted)
    */
   async getUnreadCount(userId: string): Promise<number> {
     return this.prisma.notification.count({
       where: {
         userId,
         isRead: false,
+        isMuted: false, // Exclude muted notifications from count
       },
     });
   }
@@ -170,7 +171,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new Error('Notification not found');
+      throw new NotFoundException('Notification not found');
     }
 
     return this.prisma.notification.update({
@@ -199,6 +200,64 @@ export class NotificationsService {
   }
 
   /**
+   * Mute a notification
+   */
+  async muteNotification(id: string, userId: string) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        isMuted: true,
+        mutedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Unmute a notification
+   */
+  async unmuteNotification(id: string, userId: string) {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return this.prisma.notification.update({
+      where: { id },
+      data: {
+        isMuted: false,
+        mutedAt: null,
+      },
+    });
+  }
+
+  /**
+   * Mute all notifications for a user
+   */
+  async muteAllNotifications(userId: string) {
+    return this.prisma.notification.updateMany({
+      where: {
+        userId,
+        isMuted: false,
+      },
+      data: {
+        isMuted: true,
+        mutedAt: new Date(),
+      },
+    });
+  }
+
+  /**
    * Delete a notification
    */
   async remove(id: string, userId: string) {
@@ -207,7 +266,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new Error('Notification not found');
+      throw new NotFoundException('Notification not found');
     }
 
     await this.prisma.notification.delete({
@@ -335,9 +394,9 @@ export class NotificationsService {
 
     // Send real-time WebSocket notifications
     departmentUserIds.forEach((userId) => {
-      this.websocketService.sendNotificationToUser(parseInt(userId), {
+      this.websocketService.sendNotificationToUser(userId, {
         type: 'DOCUMENT_DECREED',
-        documentId: parseInt(documentId),
+        documentId: documentId,
         title: 'Documento Decretado',
         message: `Se ha decretado el documento: ${documentTitle}`,
         timestamp: new Date(),

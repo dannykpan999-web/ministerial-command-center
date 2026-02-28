@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import * as sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,37 +13,27 @@ export interface EmailOptions {
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(EmailService.name);
   private readonly fromEmail: string;
   private readonly fromName: string;
   private readonly appUrl: string;
+  private readonly sendGridConfigured: boolean;
 
   constructor(private configService: ConfigService) {
-    this.fromEmail = this.configService.get<string>('SMTP_FROM_EMAIL') || 'noreply@mttsia.gob.gq';
-    this.fromName = this.configService.get<string>('SMTP_FROM_NAME') || 'Centro de Comando Ministerial';
-    this.appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:5173';
+    this.fromEmail = this.configService.get<string>('FROM_EMAIL') || 'noreply@safekin.org';
+    this.fromName = this.configService.get<string>('FROM_NAME') || 'Centro de Comando Ministerial';
+    this.appUrl = this.configService.get<string>('APP_URL') || 'http://72.61.41.94';
 
-    // Configure nodemailer transporter
-    const smtpHost = this.configService.get<string>('SMTP_HOST');
-    const smtpPort = this.configService.get<number>('SMTP_PORT');
-    const smtpUser = this.configService.get<string>('SMTP_USER');
-    const smtpPass = this.configService.get<string>('SMTP_PASS');
+    // Configure SendGrid
+    const sendGridApiKey = this.configService.get<string>('SENDGRID_API_KEY');
 
-    if (smtpHost && smtpUser && smtpPass) {
-      this.transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort || 587,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-      this.logger.log('Email service initialized with SMTP');
+    if (sendGridApiKey) {
+      sgMail.setApiKey(sendGridApiKey);
+      this.sendGridConfigured = true;
+      this.logger.log('Email service initialized with SendGrid');
     } else {
-      // Use ethereal for development if no SMTP configured
-      this.logger.warn('No SMTP configured, emails will be logged only');
+      this.sendGridConfigured = false;
+      this.logger.warn('No SendGrid API key configured, emails will be logged only');
     }
   }
 
@@ -80,15 +70,19 @@ export class EmailService {
     try {
       const html = this.loadTemplate(options.template, options.context);
 
-      const mailOptions = {
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const msg = {
         to: options.to,
+        from: {
+          email: this.fromEmail,
+          name: this.fromName,
+        },
         subject: options.subject,
         html,
+        text: options.context.message || options.context.title || options.subject,
       };
 
-      if (this.transporter) {
-        await this.transporter.sendMail(mailOptions);
+      if (this.sendGridConfigured) {
+        await sgMail.send(msg);
         this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
       } else {
         this.logger.log(`[DEV MODE] Email would be sent to ${options.to}: ${options.subject}`);

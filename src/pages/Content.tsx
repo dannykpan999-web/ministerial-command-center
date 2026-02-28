@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { articlesApi, type Article } from '@/lib/api/articles.api';
+import { toast } from 'sonner';
 import {
   Plus,
   FileText,
@@ -28,70 +32,18 @@ import {
   CheckCircle,
   AlertCircle,
   ArrowLeft,
-  Bold,
-  Italic,
-  List,
-  ListOrdered,
-  Link,
-  Image
+  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-interface Article {
-  id: string;
-  title: string;
-  sector: string;
-  status: 'published' | 'pending' | 'draft';
-  content: string;
-  author: string;
-  createdAt: Date;
-  updatedAt: Date;
-  sources: string[];
-}
-
-const initialArticles: Article[] = [
-  {
-    id: '1',
-    title: 'Avances en infraestructura portuaria',
-    sector: 'Puertos',
-    status: 'published',
-    content: '## Modernización del Puerto Principal\n\nEl Ministerio ha completado la primera fase del proyecto de modernización de la infraestructura portuaria, que incluye:\n\n- **Nueva terminal de contenedores**: Capacidad aumentada en un 40%\n- **Sistema de grúas automatizadas**: Reducción de tiempos de carga en 30%\n- **Centro de control digital**: Monitoreo en tiempo real de operaciones\n\n### Impacto Económico\n\nSe estima que estas mejoras generarán:\n\n1. 2,500 empleos directos\n2. Incremento del 25% en el comercio exterior\n3. Reducción de costos logísticos del 15%\n\n> "Esta inversión posiciona a nuestro país como hub logístico regional" - Ministro de Transporte',
-    author: 'María García López',
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-01-20'),
-    sources: ['Informe Técnico PT-2024-001', 'Estudio de Impacto Económico'],
-  },
-  {
-    id: '2',
-    title: 'Nueva regulación de telecomunicaciones',
-    sector: 'Telecomunicaciones',
-    status: 'pending',
-    content: '## Marco Regulatorio Actualizado\n\nLa nueva normativa de telecomunicaciones busca:\n\n- Garantizar el acceso universal a internet\n- Regular el espectro 5G\n- Proteger los derechos de los usuarios\n\n### Principales Cambios\n\nLos operadores deberán cumplir con nuevos estándares de calidad de servicio y transparencia en la facturación.',
-    author: 'Carlos Rodríguez Pérez',
-    createdAt: new Date('2024-01-18'),
-    updatedAt: new Date('2024-01-22'),
-    sources: ['Proyecto de Ley TEL-2024', 'Consulta Pública CP-001'],
-  },
-  {
-    id: '3',
-    title: 'Acuerdos de cooperación 2024',
-    sector: 'Internacional',
-    status: 'draft',
-    content: '## Nuevos Acuerdos Bilaterales\n\nDurante el primer trimestre de 2024, se han firmado acuerdos de cooperación con:\n\n- Francia: Cooperación técnica en energías renovables\n- Alemania: Intercambio en formación profesional\n- Japón: Tecnología y desarrollo sostenible\n\n### Próximos Pasos\n\nSe están negociando acuerdos adicionales con países de la región.',
-    author: 'Ana Martínez Sánchez',
-    createdAt: new Date('2024-01-10'),
-    updatedAt: new Date('2024-01-10'),
-    sources: [],
-  },
-];
 
 const sectors = ['Puertos', 'Telecomunicaciones', 'Internacional', 'Energía', 'Transporte', 'Economía'];
 
 export default function ContentPage() {
   const { t } = useLanguage();
-  const { toast } = useToast();
-  const [articles, setArticles] = useState<Article[]>(initialArticles);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -103,17 +55,67 @@ export default function ContentPage() {
   const [editContent, setEditContent] = useState('');
   const [editSources, setEditSources] = useState('');
 
+  // Fetch all articles from backend (shared across all users)
+  const { data: articles = [], isLoading } = useQuery({
+    queryKey: ['articles'],
+    queryFn: () => articlesApi.findAll(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { title: string; content: string; sector: string; sources: string[]; status: 'DRAFT' | 'PENDING' }) =>
+      articlesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...data }: { id: string; title: string; content: string; sector: string; sources: string[]; status: 'DRAFT' | 'PENDING' }) =>
+      articlesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    },
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (id: string) => articlesApi.publish(id),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      setSelectedArticle(updated);
+      toast.success('Artículo publicado. Ahora visible para todos los usuarios.');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Error al publicar');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => articlesApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      toast.success('Artículo eliminado');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Error al eliminar');
+    },
+  });
+
   const statusLabels: Record<string, string> = {
-    published: 'Publicado',
-    pending: 'Pendiente',
-    draft: 'Borrador',
+    PUBLISHED: 'Publicado',
+    PENDING: 'Pendiente',
+    DRAFT: 'Borrador',
   };
 
   const statusIcons: Record<string, React.ReactNode> = {
-    published: <CheckCircle className="h-4 w-4 text-success" />,
-    pending: <Clock className="h-4 w-4 text-warning" />,
-    draft: <AlertCircle className="h-4 w-4 text-muted-foreground" />,
+    PUBLISHED: <CheckCircle className="h-4 w-4 text-green-600" />,
+    PENDING: <Clock className="h-4 w-4 text-yellow-500" />,
+    DRAFT: <AlertCircle className="h-4 w-4 text-muted-foreground" />,
   };
+
+  const canEdit = (article: Article) =>
+    article.authorId === user?.id || user?.role === 'ADMIN';
+
+  const canPublish = user?.role === 'ADMIN' || user?.role === 'GABINETE';
 
   const handleCreateNew = () => {
     setEditTitle('');
@@ -138,81 +140,146 @@ export default function ContentPage() {
     setViewMode('detail');
   };
 
-  const handleSave = (status: 'draft' | 'pending') => {
+  const handleSave = async (status: 'DRAFT' | 'PENDING') => {
     if (!editTitle.trim() || !editSector || !editContent.trim()) {
-      toast({
-        title: 'Campos requeridos',
-        description: 'Por favor complete el título, sector y contenido',
-        variant: 'destructive',
-      });
+      toast.error('Por favor complete el título, sector y contenido');
       return;
     }
 
-    const now = new Date();
     const sources = editSources.split('\n').filter(s => s.trim());
 
-    if (isCreating) {
-      const newArticle: Article = {
-        id: `article-${Date.now()}`,
-        title: editTitle,
-        sector: editSector,
-        status,
-        content: editContent,
-        author: 'María García López',
-        createdAt: now,
-        updatedAt: now,
-        sources,
-      };
-      setArticles([newArticle, ...articles]);
-      toast({
-        title: 'Artículo creado',
-        description: status === 'draft' ? 'Guardado como borrador' : 'Enviado para aprobación',
-      });
-    } else if (selectedArticle) {
-      setArticles(articles.map(a =>
-        a.id === selectedArticle.id
-          ? { ...a, title: editTitle, sector: editSector, content: editContent, sources, status, updatedAt: now }
-          : a
-      ));
-      toast({
-        title: 'Artículo actualizado',
-        description: status === 'draft' ? 'Cambios guardados' : 'Enviado para aprobación',
-      });
+    try {
+      if (isCreating) {
+        await createMutation.mutateAsync({ title: editTitle, sector: editSector, content: editContent, sources, status });
+        toast.success(status === 'DRAFT' ? 'Artículo guardado como borrador' : 'Artículo enviado para aprobación');
+      } else if (selectedArticle) {
+        const updated = await updateMutation.mutateAsync({ id: selectedArticle.id, title: editTitle, sector: editSector, content: editContent, sources, status });
+        toast.success(status === 'DRAFT' ? 'Cambios guardados' : 'Enviado para aprobación');
+        setSelectedArticle(updated);
+      }
+      setIsEditing(false);
+      setIsCreating(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Error al guardar el artículo');
     }
-
-    setIsEditing(false);
-    setIsCreating(false);
-    setSelectedArticle(null);
   };
 
-  const handleDelete = (id: string) => {
-    setArticles(articles.filter(a => a.id !== id));
-    toast({
-      title: 'Artículo eliminado',
-      description: 'El artículo ha sido eliminado correctamente',
-    });
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Está seguro que desea eliminar este artículo?')) return;
+    await deleteMutation.mutateAsync(id);
+    if (viewMode === 'detail') {
+      setViewMode('list');
+      setSelectedArticle(null);
+    }
   };
 
-  const handlePublish = (article: Article) => {
-    setArticles(articles.map(a =>
-      a.id === article.id ? { ...a, status: 'published', updatedAt: new Date() } : a
-    ));
-    toast({
-      title: 'Artículo publicado',
-      description: 'El artículo está ahora visible públicamente',
-    });
-  };
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  // Preprocess markdown: convert single newlines to line breaks (two spaces + newline)
+  const renderMarkdown = (content: string) =>
+    content.replace(/([^\n])\n([^\n])/g, '$1  \n$2');
+
+  // Editor Dialog — rendered at top level so it works from both list and detail views
+  const editorDialog = (
+    <Dialog open={isEditing} onOpenChange={(open) => {
+      if (!open) { setIsEditing(false); setIsCreating(false); }
+    }}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="px-4 sm:px-6 pt-5 pb-4 shrink-0 border-b">
+          <DialogTitle>{isCreating ? 'Nuevo artículo' : 'Editar artículo'}</DialogTitle>
+        </DialogHeader>
+
+        <Tabs defaultValue="content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <TabsList className="mx-4 sm:mx-6 mt-4 shrink-0 w-fit">
+            <TabsTrigger value="content">Contenido</TabsTrigger>
+            <TabsTrigger value="metadata">Metadatos</TabsTrigger>
+          </TabsList>
+
+          <ScrollArea className="flex-1 min-h-0 mt-2">
+            <div className="px-4 sm:px-6 py-3 space-y-4">
+              <TabsContent value="content" className="space-y-4 mt-0">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Título</Label>
+                  <Input
+                    id="title"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Título del artículo"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="content">Contenido</Label>
+                  <Textarea
+                    id="content"
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    placeholder="Escribe el contenido usando Markdown: ## Título, **negrita**, - lista, > cita"
+                    className="min-h-[240px] font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Markdown: <code>## Título</code> · <code>**negrita**</code> · <code>- lista</code> · <code>{'>'} cita</code> · Una línea en blanco = nuevo párrafo
+                  </p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="metadata" className="space-y-4 mt-0">
+                <div className="space-y-2">
+                  <Label htmlFor="sector">Sector</Label>
+                  <Select value={editSector} onValueChange={setEditSector}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un sector" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectors.map(sector => (
+                        <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sources">Fuentes (una por línea)</Label>
+                  <Textarea
+                    id="sources"
+                    value={editSources}
+                    onChange={(e) => setEditSources(e.target.value)}
+                    placeholder={`Informe Técnico PT-2024-001\nEstudio de Impacto Económico`}
+                    className="min-h-[120px]"
+                  />
+                </div>
+              </TabsContent>
+            </div>
+          </ScrollArea>
+        </Tabs>
+
+        <div className="px-4 sm:px-6 py-4 shrink-0 border-t bg-muted/30 flex flex-wrap gap-2 justify-end">
+          <Button variant="outline" onClick={() => { setIsEditing(false); setIsCreating(false); }}>
+            Cancelar
+          </Button>
+          <Button variant="outline" onClick={() => handleSave('DRAFT')} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Guardar borrador
+          </Button>
+          <Button onClick={() => handleSave('PENDING')} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+            Enviar para aprobación
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Detail view
   if (viewMode === 'detail' && selectedArticle) {
+    // Find the latest version from the query cache
+    const latest = articles.find(a => a.id === selectedArticle.id) || selectedArticle;
     return (
+      <>
       <div className="p-6 max-w-4xl mx-auto animate-fade-in">
         <Button
           variant="ghost"
-          onClick={() => {
-            setViewMode('list');
-            setSelectedArticle(null);
-          }}
+          onClick={() => { setViewMode('list'); setSelectedArticle(null); }}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -224,32 +291,45 @@ export default function ContentPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{selectedArticle.sector}</Badge>
-                  <Badge variant={selectedArticle.status === 'published' ? 'default' : 'secondary'}>
-                    {statusIcons[selectedArticle.status]}
-                    <span className="ml-1">{statusLabels[selectedArticle.status]}</span>
+                  <Badge variant="outline">{latest.sector}</Badge>
+                  <Badge variant={latest.status === 'PUBLISHED' ? 'default' : 'secondary'}>
+                    {statusIcons[latest.status]}
+                    <span className="ml-1">{statusLabels[latest.status]}</span>
                   </Badge>
                 </div>
-                <CardTitle className="text-2xl">{selectedArticle.title}</CardTitle>
+                <CardTitle className="text-2xl">{latest.title}</CardTitle>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <User className="h-4 w-4" />
-                    {selectedArticle.author}
+                    {latest.author.firstName} {latest.author.lastName}
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    {format(selectedArticle.updatedAt, 'dd MMM yyyy', { locale: es })}
+                    {format(new Date(latest.updatedAt), 'dd MMM yyyy', { locale: es })}
                   </span>
+                  {latest.publishedAt && (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <Globe className="h-4 w-4" />
+                      Publicado {format(new Date(latest.publishedAt), 'dd MMM yyyy', { locale: es })}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(selectedArticle)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Editar
-                </Button>
-                {selectedArticle.status === 'pending' && (
-                  <Button size="sm" onClick={() => handlePublish(selectedArticle)}>
-                    <Globe className="h-4 w-4 mr-2" />
+                {canEdit(latest) && (
+                  <Button variant="outline" size="sm" onClick={() => handleEdit(latest)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar
+                  </Button>
+                )}
+                {canPublish && latest.status === 'PENDING' && (
+                  <Button
+                    size="sm"
+                    onClick={() => publishMutation.mutate(latest.id)}
+                    disabled={publishMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {publishMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Globe className="h-4 w-4 mr-2" />}
                     Publicar
                   </Button>
                 )}
@@ -258,55 +338,30 @@ export default function ContentPage() {
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[60vh]">
-              <div className="prose prose-sm max-w-none">
-                {selectedArticle.content.split('\n').map((line, i) => {
-                  if (line.startsWith('## ')) {
-                    return <h2 key={i} className="text-xl font-semibold mt-6 mb-3">{line.replace('## ', '')}</h2>;
-                  }
-                  if (line.startsWith('### ')) {
-                    return <h3 key={i} className="text-lg font-semibold mt-4 mb-2">{line.replace('### ', '')}</h3>;
-                  }
-                  if (line.startsWith('- **')) {
-                    const match = line.match(/- \*\*(.+?)\*\*: (.+)/);
-                    if (match) {
-                      return (
-                        <p key={i} className="ml-4 my-1">
-                          • <strong>{match[1]}</strong>: {match[2]}
-                        </p>
-                      );
-                    }
-                  }
-                  if (line.startsWith('- ')) {
-                    return <p key={i} className="ml-4 my-1">• {line.replace('- ', '')}</p>;
-                  }
-                  if (line.match(/^\d+\. /)) {
-                    return <p key={i} className="ml-4 my-1">{line}</p>;
-                  }
-                  if (line.startsWith('> ')) {
-                    return (
-                      <blockquote key={i} className="border-l-4 border-primary/30 pl-4 italic my-4 text-muted-foreground">
-                        {line.replace('> ', '')}
-                      </blockquote>
-                    );
-                  }
-                  if (line.trim()) {
-                    return <p key={i} className="my-2">{line}</p>;
-                  }
-                  return null;
-                })}
+              <div className="prose prose-sm max-w-none
+                prose-headings:font-semibold prose-headings:text-foreground
+                prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
+                prose-h3:text-lg prose-h3:mt-4 prose-h3:mb-2
+                prose-p:my-2 prose-p:text-foreground
+                prose-strong:font-bold prose-strong:text-foreground
+                prose-em:italic
+                prose-ul:ml-4 prose-ul:list-disc
+                prose-ol:ml-4 prose-ol:list-decimal
+                prose-li:my-1
+                prose-blockquote:border-l-4 prose-blockquote:border-primary/30 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground
+              ">
+                <ReactMarkdown>{renderMarkdown(latest.content)}</ReactMarkdown>
               </div>
 
-              {selectedArticle.sources.length > 0 && (
+              {latest.sources.length > 0 && (
                 <div className="mt-8 pt-4 border-t">
                   <h4 className="font-medium text-sm text-muted-foreground mb-2 flex items-center gap-2">
                     <ExternalLink className="h-4 w-4" />
                     Fuentes
                   </h4>
                   <ul className="space-y-1">
-                    {selectedArticle.sources.map((source, i) => (
-                      <li key={i} className="text-sm text-primary hover:underline cursor-pointer">
-                        {source}
-                      </li>
+                    {latest.sources.map((source, i) => (
+                      <li key={i} className="text-sm text-primary">{source}</li>
                     ))}
                   </ul>
                 </div>
@@ -315,6 +370,8 @@ export default function ContentPage() {
           </CardContent>
         </Card>
       </div>
+      {editorDialog}
+      </>
     );
   }
 
@@ -335,22 +392,22 @@ export default function ContentPage() {
       <div className="grid gap-4 sm:grid-cols-3 mb-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-success" />
+            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'published').length}</p>
+              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'PUBLISHED').length}</p>
               <p className="text-sm text-muted-foreground">Publicados</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-warning" />
+            <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-yellow-500" />
             </div>
             <div>
-              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'pending').length}</p>
+              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'PENDING').length}</p>
               <p className="text-sm text-muted-foreground">Pendientes</p>
             </div>
           </CardContent>
@@ -361,7 +418,7 @@ export default function ContentPage() {
               <FileText className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'draft').length}</p>
+              <p className="text-2xl font-semibold">{articles.filter(a => a.status === 'DRAFT').length}</p>
               <p className="text-sm text-muted-foreground">Borradores</p>
             </div>
           </CardContent>
@@ -369,180 +426,88 @@ export default function ContentPage() {
       </div>
 
       {/* Articles list */}
-      <div className="space-y-3">
-        {articles.map(article => (
-          <Card
-            key={article.id}
-            className="hover:border-primary/20 transition-all hover:shadow-md"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleView(article)}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="font-medium hover:text-primary transition-colors">{article.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-0.5">{article.sector}</p>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Cargando artículos...</span>
+        </div>
+      ) : articles.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">No hay artículos aún. Cree el primero.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {articles.map(article => (
+            <Card key={article.id} className="hover:border-primary/20 transition-all hover:shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleView(article)}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-medium hover:text-primary transition-colors">{article.title}</h3>
+                        <p className="text-sm text-muted-foreground mt-0.5">{article.sector}</p>
+                      </div>
+                      <Badge variant={article.status === 'PUBLISHED' ? 'default' : 'secondary'}>
+                        {statusIcons[article.status]}
+                        <span className="ml-1">{statusLabels[article.status]}</span>
+                      </Badge>
                     </div>
-                    <Badge variant={article.status === 'published' ? 'default' : 'secondary'}>
-                      {statusIcons[article.status]}
-                      <span className="ml-1">{statusLabels[article.status]}</span>
-                    </Badge>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {article.author.firstName} {article.author.lastName}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(article.updatedAt), 'dd MMM yyyy', { locale: es })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      {article.author}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {format(article.updatedAt, 'dd MMM yyyy', { locale: es })}
-                    </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleView(article)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {canEdit(article) && (
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(article)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canPublish && article.status === 'PENDING' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-green-600 hover:text-green-700"
+                        onClick={() => publishMutation.mutate(article.id)}
+                        title="Publicar"
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit(article) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(article.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => handleView(article)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(article)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(article.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* Editor Dialog */}
-      <Dialog open={isEditing} onOpenChange={(open) => {
-        if (!open) {
-          setIsEditing(false);
-          setIsCreating(false);
-        }
-      }}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>
-              {isCreating ? 'Nuevo artículo' : 'Editar artículo'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <Tabs defaultValue="content" className="mt-4">
-            <TabsList>
-              <TabsTrigger value="content">Contenido</TabsTrigger>
-              <TabsTrigger value="metadata">Metadatos</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="content" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Título</Label>
-                <Input
-                  id="title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Título del artículo"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="content">Contenido</Label>
-                <div className="border rounded-lg">
-                  {/* Simple toolbar */}
-                  <div className="flex items-center gap-1 p-2 border-b bg-muted/30">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Bold className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Italic className="h-4 w-4" />
-                    </Button>
-                    <div className="w-px h-6 bg-border mx-1" />
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <ListOrdered className="h-4 w-4" />
-                    </Button>
-                    <div className="w-px h-6 bg-border mx-1" />
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Link className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Image className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Textarea
-                    id="content"
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    placeholder="Escribe el contenido usando Markdown..."
-                    className="min-h-[300px] border-0 rounded-none focus-visible:ring-0"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Soporta formato Markdown: ## para títulos, **negrita**, - para listas, {'>'} para citas
-                </p>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="metadata" className="space-y-4 mt-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="sector">Sector</Label>
-                  <Select value={editSector} onValueChange={setEditSector}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un sector" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors.map(sector => (
-                        <SelectItem key={sector} value={sector}>{sector}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sources">Fuentes (una por línea)</Label>
-                <Textarea
-                  id="sources"
-                  value={editSources}
-                  onChange={(e) => setEditSources(e.target.value)}
-                  placeholder="Informe Técnico PT-2024-001&#10;Estudio de Impacto Económico"
-                  className="min-h-[100px]"
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => {
-              setIsEditing(false);
-              setIsCreating(false);
-            }}>
-              Cancelar
-            </Button>
-            <Button variant="outline" onClick={() => handleSave('draft')}>
-              <Save className="h-4 w-4 mr-2" />
-              Guardar borrador
-            </Button>
-            <Button onClick={() => handleSave('pending')}>
-              <Send className="h-4 w-4 mr-2" />
-              Enviar para aprobación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editorDialog}
     </div>
   );
 }

@@ -21,7 +21,8 @@ import { documentsApi, type CreateDocumentDto } from '@/lib/api/documents.api';
 import { useCreateDocument } from '@/hooks/useDocuments';
 import { entitiesApi } from '@/lib/api/entities.api';
 import { usersApi } from '@/lib/api/users.api';
-import { Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText, Upload } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 const documentTypes = [
   'Oficio',
@@ -42,6 +43,8 @@ export default function NewEntry() {
   const queryClient = useQueryClient();
   const createDocument = useCreateDocument();
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'creating' | 'uploading'>('idle');
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -55,6 +58,11 @@ export default function NewEntry() {
     priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
     content: '',
     receivedAt: new Date().toISOString().split('T')[0],
+    // Official PDF header fields
+    subDepartment: '',
+    referenceCode: '',
+    signerTitle: '',
+    recipientTitle: '',
   });
 
   // Fetch entities (departments)
@@ -92,6 +100,7 @@ export default function NewEntry() {
 
     try {
       setLoading(true);
+      setUploadStatus('creating');
       toast.loading('Creando documento...');
 
       // Create document
@@ -107,22 +116,48 @@ export default function NewEntry() {
         priority: formData.priority,
         content: formData.content || undefined,
         receivedAt: formData.receivedAt ? new Date(formData.receivedAt) : undefined,
+        // Official PDF fields
+        subDepartment: formData.subDepartment || undefined,
+        referenceCode: formData.referenceCode || undefined,
+        signerTitle: formData.signerTitle || undefined,
+        recipientTitle: formData.recipientTitle || undefined,
       };
 
       const document = await createDocument.mutateAsync(createDto);
 
-      // Upload files if any
-      if (uploadedFiles.length > 0) {
-        const filesToUpload = uploadedFiles
-          .filter((f) => f.file)
-          .map((f) => f.file!);
+      // Upload files if any (separate step with its own error handling)
+      const filesToUpload = uploadedFiles
+        .filter((f) => f.file)
+        .map((f) => f.file!);
 
-        if (filesToUpload.length > 0) {
-          await documentsApi.uploadFiles(document.id, filesToUpload);
+      if (filesToUpload.length > 0) {
+        toast.dismiss();
+        setUploadStatus('uploading');
+        setUploadProgress(0);
+        toast.loading(`Subiendo ${filesToUpload.length} archivo(s)... 0%`);
+
+        try {
+          await documentsApi.uploadFiles(document.id, filesToUpload, (progress) => {
+            setUploadProgress(progress);
+            toast.dismiss();
+            toast.loading(`Subiendo archivos... ${progress}%`);
+          });
+          toast.dismiss();
+          toast.success('Documento y archivos creados correctamente');
+        } catch (uploadError: any) {
+          // Document was created successfully but file upload failed
+          toast.dismiss();
+          const errMsg = uploadError.response?.data?.message || uploadError.message || 'Error de conexión';
+          toast.error(
+            `Documento guardado, pero falló la subida de archivos: ${errMsg}. Puede adjuntarlos desde el detalle del documento.`,
+            { duration: 8000 }
+          );
+          // Still navigate — the document itself was created
         }
+      } else {
+        toast.dismiss();
+        toast.success('Documento creado correctamente');
       }
-
-      toast.dismiss();
 
       // Wait for all document queries to refetch before navigating
       await queryClient.refetchQueries({ queryKey: ['documents'] });
@@ -130,11 +165,14 @@ export default function NewEntry() {
       // Navigate to inbox
       navigate('/inbox');
     } catch (error: any) {
+      // Only reaches here if document CREATION itself failed
       console.error('Error creating document:', error);
       toast.dismiss();
       toast.error('Error al crear documento: ' + (error.response?.data?.message || error.message || 'Error desconocido'));
     } finally {
       setLoading(false);
+      setUploadStatus('idle');
+      setUploadProgress(0);
     }
   };
 
@@ -198,8 +236,8 @@ export default function NewEntry() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="IN">Entrante (INCOMING)</SelectItem>
-                    <SelectItem value="OUT">Saliente (OUTGOING)</SelectItem>
+                    <SelectItem value="IN">Bandeja de Entrada</SelectItem>
+                    <SelectItem value="OUT">Bandeja de Salida</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -275,7 +313,7 @@ export default function NewEntry() {
                   <SelectContent>
                     {users.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>
-                        {u.name} - {u.role}
+                        {u.firstName} {u.lastName} ({u.role})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -283,8 +321,8 @@ export default function NewEntry() {
               </div>
             </div>
 
-            {/* Priority, Classification, and Received Date */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Priority and Received Date */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="priority">Prioridad</Label>
                 <Select
@@ -299,22 +337,6 @@ export default function NewEntry() {
                     <SelectItem value="MEDIUM">Media</SelectItem>
                     <SelectItem value="HIGH">Alta</SelectItem>
                     <SelectItem value="URGENT">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="classification">Clasificación</Label>
-                <Select
-                  value={formData.classification}
-                  onValueChange={(value: any) => setFormData({ ...formData, classification: value })}
-                >
-                  <SelectTrigger id="classification">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="INTERNAL">Interna</SelectItem>
-                    <SelectItem value="EXTERNAL">Externa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -342,6 +364,67 @@ export default function NewEntry() {
               />
             </div>
 
+            {/* Official PDF Header Fields */}
+            <div className="p-4 border rounded-lg bg-blue-50/50 space-y-4">
+              <div className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Datos para el PDF Oficial (membrete del documento)
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="subDepartment">Dirección General / Sub-Departamento</Label>
+                  <input
+                    id="subDepartment"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    placeholder="Ej: Dirección General de Puertos y Marina Mercante"
+                    value={formData.subDepartment}
+                    onChange={(e) => setFormData({ ...formData, subDepartment: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="referenceCode">Recc- / Código de Referencia</Label>
+                  <input
+                    id="referenceCode"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    placeholder="Ej: Puerto Privados"
+                    value={formData.referenceCode}
+                    onChange={(e) => setFormData({ ...formData, referenceCode: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signerTitle">Título del Firmante</Label>
+                  <Select
+                    value={formData.signerTitle}
+                    onValueChange={(value) => setFormData({ ...formData, signerTitle: value })}
+                  >
+                    <SelectTrigger id="signerTitle">
+                      <SelectValue placeholder="Seleccione título del firmante" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="El Ministro">El Ministro</SelectItem>
+                      <SelectItem value="La Ministra">La Ministra</SelectItem>
+                      <SelectItem value="El Director General">El Director General</SelectItem>
+                      <SelectItem value="La Directora General">La Directora General</SelectItem>
+                      <SelectItem value="El Secretario General">El Secretario General</SelectItem>
+                      <SelectItem value="La Secretaria General">La Secretaria General</SelectItem>
+                      <SelectItem value="El Director de Departamento">El Director de Departamento</SelectItem>
+                      <SelectItem value="La Directora de Departamento">La Directora de Departamento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="recipientTitle">Destinatario (línea final del documento)</Label>
+                  <input
+                    id="recipientTitle"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    placeholder="Ej: Excmo. Señor Ministro de Transportes, Correos y Sistemas de Inteligencia Artificial"
+                    value={formData.recipientTitle}
+                    onChange={(e) => setFormData({ ...formData, recipientTitle: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* File Upload */}
             <div className="space-y-2">
               <Label>Archivos Adjuntos</Label>
@@ -349,9 +432,20 @@ export default function NewEntry() {
                 files={uploadedFiles}
                 onFilesChange={setUploadedFiles}
                 maxFiles={10}
-                maxSize={50 * 1024 * 1024} // 50MB
+                maxSize={50}
               />
             </div>
+
+            {/* Upload Progress Bar */}
+            {uploadStatus === 'uploading' && (
+              <div className="space-y-1 pt-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Upload className="h-4 w-4 animate-pulse" />
+                  <span>Subiendo archivos... {uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
+              </div>
+            )}
 
             {/* Submit Buttons */}
             <div className="flex gap-3 justify-end pt-4">
@@ -365,7 +459,9 @@ export default function NewEntry() {
               </Button>
               <Button type="submit" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Crear Documento
+                {uploadStatus === 'creating' ? 'Creando documento...' :
+                 uploadStatus === 'uploading' ? `Subiendo archivos ${uploadProgress}%...` :
+                 'Crear Documento'}
               </Button>
             </div>
           </CardContent>

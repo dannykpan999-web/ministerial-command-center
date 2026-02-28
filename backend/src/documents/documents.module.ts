@@ -19,6 +19,7 @@ import { ManualEntryStampService } from './manual-entry-stamp.service';
 import { AcknowledgmentService } from './acknowledgment.service';
 import { SignatureProtocolService } from './signature-protocol.service';
 import { AIDocumentGeneratorService } from './ai-document-generator.service';
+import { OfficialWordTemplateService } from './official-word-template.service';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { AIDocumentGeneratorService } from './ai-document-generator.service';
     AcknowledgmentService,
     SignatureProtocolService,
     AIDocumentGeneratorService,
+    OfficialWordTemplateService,
   ],
   exports: [
     DocumentsService,

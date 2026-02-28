@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { documentsApi } from '@/lib/api/documents.api';
 import { entitiesApi } from '@/lib/api/entities.api';
@@ -33,9 +39,11 @@ import {
   Copy,
   Plus,
   Loader2,
+  X,
+  Search,
+  Link,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { delay } from '@/lib/mockData';
 
 interface Message {
   id: string;
@@ -44,6 +52,12 @@ interface Message {
   title?: string;
   sources?: { title: string; id: string }[];
   metadata?: any;
+}
+
+interface LinkedDocument {
+  id: string;
+  correlativeNumber: string;
+  title: string;
 }
 
 const modes = [
@@ -86,6 +100,25 @@ export default function AIAssistant() {
   const [tone, setTone] = useState('formal');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Linked documents state
+  const [linkedDocuments, setLinkedDocuments] = useState<LinkedDocument[]>([]);
+  const [addDocOpen, setAddDocOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Search documents query (only fires when dialog is open and has search term)
+  const { data: searchResults, isLoading: isSearching } = useQuery({
+    queryKey: ['ai-doc-search', debouncedSearch],
+    queryFn: () => documentsApi.findAll({ search: debouncedSearch, limit: 10 }),
+    enabled: addDocOpen && debouncedSearch.trim().length >= 2,
+  });
+
   // Fetch entities for document creation
   const { data: entitiesData, isLoading: isLoadingEntities, error: entitiesError } = useQuery({
     queryKey: ['entities'],
@@ -100,13 +133,32 @@ export default function AIAssistant() {
     scrollToBottom();
   }, [messages]);
 
-  // Log entities loading errors
   useEffect(() => {
     if (entitiesError) {
       console.error('Error loading entities:', entitiesError);
       toast.error('Error al cargar entidades. Algunas funciones pueden no estar disponibles.');
     }
   }, [entitiesError]);
+
+  const handleAddLinkedDocument = (doc: any) => {
+    const alreadyLinked = linkedDocuments.some(d => d.id === doc.id);
+    if (alreadyLinked) {
+      toast.info('Este documento ya está vinculado');
+      return;
+    }
+    setLinkedDocuments(prev => [...prev, {
+      id: doc.id,
+      correlativeNumber: doc.correlativeNumber || doc.id.slice(0, 8),
+      title: doc.title,
+    }]);
+    setAddDocOpen(false);
+    setSearchQuery('');
+    toast.success(`Documento ${doc.correlativeNumber || doc.title} vinculado`);
+  };
+
+  const handleRemoveLinkedDocument = (docId: string) => {
+    setLinkedDocuments(prev => prev.filter(d => d.id !== docId));
+  };
 
   // Mutation for generating document from prompt
   const generateMutation = useMutation({
@@ -116,7 +168,8 @@ export default function AIAssistant() {
         prompt,
         tone,
         language: 'es',
-      });
+        linkedDocumentIds: linkedDocuments.map(d => d.id),
+      } as any);
     },
     onSuccess: (data) => {
       const aiMessage: Message = {
@@ -140,10 +193,14 @@ export default function AIAssistant() {
   const handleSend = async () => {
     if (!input.trim()) return;
 
+    const linkedNote = linkedDocuments.length > 0
+      ? ` [Contexto: ${linkedDocuments.map(d => d.correlativeNumber).join(', ')}]`
+      : '';
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: `[${documentTypes.find(dt => dt.id === documentType)?.label}] ${input}`,
+      content: `[${documentTypes.find(dt => dt.id === documentType)?.label}]${linkedNote} ${input}`,
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -151,7 +208,6 @@ export default function AIAssistant() {
     setInput('');
     setLoading(true);
 
-    // Call real API
     generateMutation.mutate(currentInput);
   };
 
@@ -164,7 +220,6 @@ export default function AIAssistant() {
 
   const handleCopy = async (content: string) => {
     try {
-      // Try modern clipboard API first
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(content);
         toast.success('Texto copiado al portapapeles');
@@ -174,30 +229,19 @@ export default function AIAssistant() {
       console.log('Modern clipboard API failed, trying fallback:', clipboardError);
     }
 
-    // Fallback for older browsers or HTTP (non-HTTPS)
     try {
       const textArea = window.document.createElement('textarea');
       textArea.value = content;
-
-      // Make textarea visible but out of viewport
       textArea.style.position = 'absolute';
       textArea.style.left = '-9999px';
       textArea.style.top = '0';
       textArea.style.opacity = '0';
-
       window.document.body.appendChild(textArea);
-
-      // Select the text
       textArea.focus();
       textArea.select();
       textArea.setSelectionRange(0, content.length);
-
-      // Execute copy command
       const successful = window.document.execCommand('copy');
-
-      // Remove textarea
       window.document.body.removeChild(textArea);
-
       if (successful) {
         toast.success('Texto copiado al portapapeles');
       } else {
@@ -226,10 +270,8 @@ export default function AIAssistant() {
         return;
       }
 
-      // Get the first entity as default
       const defaultEntity = entitiesData[0];
 
-      // Create document as DRAFT
       const documentData = {
         title: message.title || 'Documento Generado por IA',
         type: documentType,
@@ -262,19 +304,16 @@ export default function AIAssistant() {
 
   const handleDownloadPDF = (message: Message) => {
     try {
-      // Create PDF using jsPDF
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
       });
 
-      // Add title
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.text(message.title || 'Documento Generado por IA', 20, 20);
 
-      // Add metadata
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text(`Tipo: ${documentTypes.find(dt => dt.id === documentType)?.label}`, 20, 30);
@@ -285,11 +324,9 @@ export default function AIAssistant() {
         doc.text(`Páginas estimadas: ${message.metadata.estimatedPages || 'N/A'}`, 20, 45);
       }
 
-      // Add content
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
 
-      // Split content into lines
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 20;
       const maxWidth = pageWidth - (margin * 2);
@@ -308,7 +345,6 @@ export default function AIAssistant() {
         yPosition += lineHeight;
       });
 
-      // Save PDF
       const filename = `${message.title?.replace(/\s+/g, '_') || 'documento'}_${Date.now()}.pdf`;
       doc.save(filename);
 
@@ -318,6 +354,8 @@ export default function AIAssistant() {
       toast.error('Error al generar el PDF');
     }
   };
+
+  const searchDocuments = searchResults?.data || searchResults?.documents || (Array.isArray(searchResults) ? searchResults : []);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] max-w-7xl mx-auto animate-fade-in">
@@ -465,26 +503,122 @@ export default function AIAssistant() {
           </Select>
         </div>
 
+        {/* Linked Documents */}
         <div className="space-y-3">
           <Label className="text-sm font-medium">Documentos vinculados</Label>
           <Card>
             <CardContent className="p-3 space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate">ENT-2024-001542</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate">EXP-2024-00342</span>
-              </div>
-              <Button variant="ghost" size="sm" className="w-full mt-2">
+              {linkedDocuments.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Sin documentos vinculados.<br />Añade contexto para mejores respuestas.
+                </p>
+              ) : (
+                linkedDocuments.map(doc => (
+                  <div key={doc.id} className="flex items-center gap-2 text-sm group">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate flex-1 text-xs" title={doc.title}>
+                      {doc.correlativeNumber}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveLinkedDocument(doc.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      title="Quitar documento"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => setAddDocOpen(true)}
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Añadir documento
               </Button>
             </CardContent>
           </Card>
+          {linkedDocuments.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              <Link className="h-3 w-3 inline mr-1" />
+              El IA usará estos documentos como contexto.
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Add Document Dialog */}
+      <Dialog open={addDocOpen} onOpenChange={(open) => {
+        setAddDocOpen(open);
+        if (!open) setSearchQuery('');
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Buscar documento para vincular
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Input
+              placeholder="Buscar por título o número de documento..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+
+            <div className="min-h-[200px] max-h-[300px] overflow-y-auto space-y-1">
+              {debouncedSearch.trim().length < 2 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Escribe al menos 2 caracteres para buscar
+                </p>
+              ) : isSearching ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Buscando...</span>
+                </div>
+              ) : searchDocuments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No se encontraron documentos
+                </p>
+              ) : (
+                searchDocuments.map((doc: any) => {
+                  const alreadyLinked = linkedDocuments.some(d => d.id === doc.id);
+                  return (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleAddLinkedDocument(doc)}
+                      disabled={alreadyLinked}
+                      className={cn(
+                        'w-full text-left px-3 py-2 rounded-md text-sm transition-colors border',
+                        alreadyLinked
+                          ? 'opacity-50 cursor-not-allowed bg-muted border-transparent'
+                          : 'hover:bg-accent border-transparent hover:border-border cursor-pointer'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.correlativeNumber} · {doc.direction === 'IN' ? 'Entrada' : 'Salida'}
+                          </p>
+                        </div>
+                        {alreadyLinked && (
+                          <Badge variant="secondary" className="text-xs shrink-0">Vinculado</Badge>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

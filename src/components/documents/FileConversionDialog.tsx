@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { documentsApi } from '../../lib/api/documents.api';
@@ -66,7 +66,7 @@ export function FileConversionDialog({
     if (!convertedFileId) return;
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${API_URL}/documents/files/${convertedFileId}/download`);
 
       if (!response.ok) {
@@ -88,6 +88,19 @@ export function FileConversionDialog({
     }
   };
 
+  // Load supported formats when dialog opens
+  useEffect(() => {
+    if (open && supportedFormats.length === 0 && !loading) {
+      loadSupportedFormats();
+    }
+    // Reset state when dialog closes
+    if (!open) {
+      setConverting(false);
+      setConvertedFileId(null);
+      setSupportedFormats([]);
+    }
+  }, [open]);
+
   // Check if file can be converted
   const canConvert = () => {
     // Office documents that can be converted to PDF
@@ -102,11 +115,6 @@ export function FileConversionDialog({
 
     return convertibleTypes.includes(mimeType);
   };
-
-  // Load supported formats when dialog opens
-  if (open && supportedFormats.length === 0 && !loading) {
-    loadSupportedFormats();
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

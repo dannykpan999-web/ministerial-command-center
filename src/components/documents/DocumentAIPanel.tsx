@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Document, getDepartmentById, Department } from '@/lib/mockData';
+import { Department } from '@/lib/api/departments.api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -37,14 +37,46 @@ import { axiosInstance } from '@/lib/api/axios';
 import { useNavigate } from 'react-router-dom';
 import { departmentsApi } from '@/lib/api/departments.api';
 
+function getDeptColor(level: number): string {
+  const colors = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#6366F1'];
+  return colors[(level - 1) % colors.length];
+}
+
+function getDeptCode(dept: Department): string {
+  if (dept.shortName) return dept.shortName;
+  const words = dept.name.split(' ');
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return dept.name.substring(0, 2).toUpperCase();
+}
+
 interface DocumentAIPanelProps {
-  document: Document;
+  document: any;
   onClose?: () => void;
+}
+
+/**
+ * Convert plain text (from OpenAI) to HTML for CKEditor.
+ * Double newlines → paragraph breaks, single newlines → <br>.
+ */
+function plainTextToHtml(text: string): string {
+  if (!text || text.trim() === '') return '';
+  // If it already contains HTML tags, return as-is
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return text
+    .split(/\n{2,}/)
+    .map(para => {
+      const inner = para.trim().replace(/\n/g, '<br>');
+      return inner ? `<p>${inner}</p>` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
   const [copied, setCopied] = useState<'summary' | 'response' | null>(null);
-  const [editedResponse, setEditedResponse] = useState(document.aiProposedResponse || '');
+  const [editedResponse, setEditedResponse] = useState(
+    plainTextToHtml(document.aiProposedResponse || '')
+  );
 
   // Local state for AI content (so we can update it without mutating props)
   const [aiSummary, setAiSummary] = useState(document.aiSummary || '');
@@ -54,8 +86,17 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // Fetch departments for decreted-to display
+  const { data: allDepartments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: departmentsApi.findAll,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const handleCopy = async (text: string, type: 'summary' | 'response') => {
-    await navigator.clipboard.writeText(text);
+    // Strip HTML tags for clipboard copy (plain text)
+    const plain = text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+    await navigator.clipboard.writeText(plain);
     setCopied(type);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -66,26 +107,45 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
       const response = await axiosInstance.post(`/documents/${document.id}/generate-ai`, { force });
       return response.data;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      queryClient.invalidateQueries({ queryKey: ['inbox-documents'] });
+    onSuccess: async () => {
+      // Always do a fresh fetch to get the actual saved AI fields from DB
+      // (the generate-ai response may have stale or incomplete data)
+      try {
+        const freshResponse = await axiosInstance.get(`/documents/${document.id}`);
+        const updatedDoc = freshResponse.data;
 
-      // Update local state with new AI data
-      if (data.document) {
-        // Update all AI state
-        setAiSummary(data.document.aiSummary || '');
-        setAiKeyPoints(data.document.aiKeyPoints || []);
-        setAiProposedResponse(data.document.aiProposedResponse || '');
+        const newSummary = updatedDoc.aiSummary || '';
+        const newKeyPoints = updatedDoc.aiKeyPoints || [];
+        const newProposedResponse = updatedDoc.aiProposedResponse || '';
 
-        // Update the editable response textarea
-        if (data.document.aiProposedResponse) {
-          setEditedResponse(data.document.aiProposedResponse);
+        setAiSummary(newSummary);
+        setAiKeyPoints(newKeyPoints);
+        setAiProposedResponse(newProposedResponse);
+
+        if (newProposedResponse) {
+          setEditedResponse(plainTextToHtml(newProposedResponse));
         }
-      }
 
-      toast.success('IA generada exitosamente', {
-        description: 'El contenido se ha actualizado automáticamente',
-      });
+        queryClient.invalidateQueries({ queryKey: ['documents'] });
+        queryClient.invalidateQueries({ queryKey: ['inbox-documents'] });
+        queryClient.invalidateQueries({ queryKey: ['outbox-documents'] });
+
+        if (newProposedResponse) {
+          toast.success('IA generada exitosamente', {
+            description: 'El contenido se ha actualizado automáticamente',
+          });
+        } else if (newSummary) {
+          toast.success('Resumen generado', {
+            description: 'No se pudo generar borrador de respuesta. Agregue más contenido al documento.',
+          });
+        } else {
+          toast.warning('Sin contenido suficiente', {
+            description: 'El documento necesita más texto para generar análisis IA.',
+          });
+        }
+      } catch {
+        toast.error('Error al obtener resultados de IA');
+      }
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.message || 'Error al generar contenido IA';
@@ -128,12 +188,12 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
       queryClient.invalidateQueries({ queryKey: ['outbox-documents'] });
 
       toast.success('Documento de respuesta creado', {
-        description: 'Se ha creado un nuevo documento borrador con la respuesta propuesta',
+        description: 'El borrador se ha guardado en la Bandeja de Salida',
       });
 
-      // Close panel and navigate to new document
+      // Navigate to outbox where the new draft document was created
       onClose?.();
-      navigate(`/documents/${data.id}`);
+      navigate('/outbox');
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.message || 'Error al crear documento de respuesta';
@@ -151,7 +211,9 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
     createResponseMutation.mutate();
   };
 
-  const decretedDepartments = document.decretedTo?.map(id => getDepartmentById(id)).filter(Boolean) as Department[];
+  const decretedDepartments = (document.decretedTo || [])
+    .map((id: string) => allDepartments.find((d: Department) => d.id === id))
+    .filter(Boolean) as Department[];
 
   return (
     <div className="space-y-4">
@@ -251,17 +313,21 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
               <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
                 <FileText className="h-4 w-4 text-blue-500" />
               </div>
-              Respuesta propuesta
+              Borrador de respuesta (editable)
             </CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          {aiProposedResponse ? (
+          {(aiProposedResponse || editedResponse) ? (
             <div className="space-y-3">
-              <Textarea
+              <p className="text-xs text-muted-foreground">
+                Edite el borrador antes de guardarlo como nuevo documento de salida.
+              </p>
+              <RichTextEditor
                 value={editedResponse}
-                onChange={(e) => setEditedResponse(e.target.value)}
-                className="min-h-[150px] text-sm resize-none"
+                onChange={setEditedResponse}
+                minHeight="200px"
+                placeholder="Borrador de respuesta generado por IA..."
               />
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -294,19 +360,22 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
                   ) : (
                     <Send className="h-3.5 w-3.5" />
                   )}
-                  Crear documento de respuesta
+                  Guardar como borrador de respuesta
                 </Button>
               </div>
             </div>
           ) : (
             <div className="text-center py-6">
               <FileText className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No hay respuesta propuesta
+              <p className="text-sm text-muted-foreground mb-1">
+                No hay borrador de respuesta
               </p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={handleRegenerate}>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generar respuesta
+              <p className="text-xs text-muted-foreground mb-3">
+                Analice el documento con IA para generar un borrador editable.
+              </p>
+              <Button variant="default" size="sm" className="gap-2" onClick={handleRegenerate} disabled={generateAIMutation.isPending}>
+                {generateAIMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Generar análisis y borrador de respuesta
               </Button>
             </div>
           )}
@@ -334,13 +403,13 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
                   <div className="flex items-center gap-3">
                     <div
                       className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: dept.color }}
+                      style={{ backgroundColor: getDeptColor(dept.level) }}
                     >
-                      {dept.code}
+                      {getDeptCode(dept)}
                     </div>
                     <div>
                       <p className="text-sm font-medium">{dept.name}</p>
-                      <p className="text-xs text-muted-foreground">{dept.email}</p>
+                      <p className="text-xs text-muted-foreground">{dept.shortName || `Nivel ${dept.level}`}</p>
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -365,7 +434,7 @@ export function DocumentAIPanel({ document, onClose }: DocumentAIPanelProps) {
 interface DecreeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  document: Document;
+  document: any;
   onDecree?: (data: {
     departmentIds: string[];
     sendNotification: boolean;
@@ -384,29 +453,6 @@ export function DecreeDialog({ open, onOpenChange, document, onDecree }: DecreeD
     queryFn: departmentsApi.findAll,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
-
-  // Generate color based on department level
-  const getDeptColor = (level: number) => {
-    const colors = [
-      '#8B5CF6', // Purple - Level 1
-      '#3B82F6', // Blue - Level 2
-      '#10B981', // Green - Level 3
-      '#F59E0B', // Amber - Level 4
-      '#EF4444', // Red - Level 5
-      '#6366F1', // Indigo - Level 6
-    ];
-    return colors[(level - 1) % colors.length];
-  };
-
-  // Generate code from department name
-  const getDeptCode = (dept: any) => {
-    if (dept.shortName) return dept.shortName;
-    const words = dept.name.split(' ');
-    if (words.length >= 2) {
-      return (words[0][0] + words[1][0]).toUpperCase();
-    }
-    return dept.name.substring(0, 2).toUpperCase();
-  };
 
   const toggleDepartment = (id: string) => {
     setSelectedDepts(prev =>
@@ -497,6 +543,7 @@ export function DecreeDialog({ open, onOpenChange, document, onDecree }: DecreeD
                           <Checkbox
                             checked={selectedDepts.includes(dept.id)}
                             onCheckedChange={() => toggleDepartment(dept.id)}
+                            onClick={(e) => e.stopPropagation()}
                           />
                           <div
                             className="h-10 w-10 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"

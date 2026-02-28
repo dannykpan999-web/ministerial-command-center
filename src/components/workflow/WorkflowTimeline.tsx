@@ -175,6 +175,11 @@ const OUTGOING_STAGES: WorkflowStage[] = [
 ];
 
 export function WorkflowTimeline({ document, className, compact = false }: WorkflowTimelineProps) {
+  // Return null if document or required fields are missing
+  if (!document || !document.direction || !document.currentStage) {
+    return null;
+  }
+
   const stages = useMemo(() => {
     return document.direction === 'IN' ? INCOMING_STAGES : OUTGOING_STAGES;
   }, [document.direction]);

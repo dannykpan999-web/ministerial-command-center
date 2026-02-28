@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { WorkflowTimeline } from '@/components/workflow/WorkflowTimeline';
+import { DocumentStageProgress } from '@/components/workflow/DocumentStageProgress';
 import {
   Search,
   FileText,
@@ -20,7 +22,11 @@ import {
   Calendar,
   User,
   Tag,
-  FolderOpen
+  FolderOpen,
+  Sparkles,
+  FileDown,
+  History,
+  Building
 } from 'lucide-react';
 import { entitiesApi } from '@/lib/api/entities.api';
 import { documentsApi } from '@/lib/api/documents.api';
@@ -244,9 +250,33 @@ export default function ArchivePage() {
                               {doc.tags.slice(0, 2).join(', ')}
                             </span>
                           )}
+                          {doc.aiSummary && (
+                            <span className="flex items-center gap-1 text-primary">
+                              <Sparkles className="h-3 w-3" />
+                              IA
+                            </span>
+                          )}
                         </div>
+                        {doc.direction && doc.currentStage && (
+                          <div className="mt-3">
+                            <DocumentStageProgress
+                              direction={doc.direction}
+                              currentStage={doc.currentStage}
+                              size="sm"
+                              showIcon={false}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" className="shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDocument(doc);
+                        }}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </div>
@@ -291,14 +321,22 @@ export default function ArchivePage() {
 
           {selectedDocument && (
             <Tabs defaultValue="preview" className="mt-6">
-              <TabsList className="grid w-full grid-cols-2 h-11">
-                <TabsTrigger value="preview" className="text-base">
-                  <Eye className="h-4 w-4 mr-2" />
+              <TabsList className="grid w-full grid-cols-4 h-11">
+                <TabsTrigger value="preview" className="text-sm">
+                  <Eye className="h-4 w-4 mr-1.5" />
                   Vista previa
                 </TabsTrigger>
-                <TabsTrigger value="metadata" className="text-base">
-                  <FileText className="h-4 w-4 mr-2" />
+                <TabsTrigger value="metadata" className="text-sm">
+                  <FileText className="h-4 w-4 mr-1.5" />
                   Metadatos
+                </TabsTrigger>
+                <TabsTrigger value="workflow" className="text-sm">
+                  <History className="h-4 w-4 mr-1.5" />
+                  Workflow
+                </TabsTrigger>
+                <TabsTrigger value="files" className="text-sm">
+                  <FileDown className="h-4 w-4 mr-1.5" />
+                  Archivos
                 </TabsTrigger>
               </TabsList>
 
@@ -379,9 +417,13 @@ export default function ArchivePage() {
                           <div className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dirección</span>
                             <div className="flex items-center gap-2">
-                              <Badge variant={selectedDocument.direction === 'IN' ? 'default' : 'secondary'}>
-                                {selectedDocument.direction === 'IN' ? 'Entrada' : 'Salida'}
-                              </Badge>
+                              {selectedDocument.direction ? (
+                                <Badge variant={selectedDocument.direction === 'IN' ? 'default' : 'secondary'}>
+                                  {selectedDocument.direction === 'IN' ? 'Entrada' : 'Salida'}
+                                </Badge>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">N/A</span>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-col gap-1">
@@ -447,6 +489,160 @@ export default function ArchivePage() {
                         </div>
                       </CardContent>
                     </Card>
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="workflow" className="mt-6">
+                <ScrollArea className="h-[55vh]">
+                  <div className="space-y-6 px-1">
+                    {selectedDocument.direction && selectedDocument.currentStage ? (
+                      <>
+                        {/* Workflow Progress */}
+                        <Card className="border-2">
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <History className="h-4 w-4 text-primary" />
+                              Estado del Workflow
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <DocumentStageProgress
+                              direction={selectedDocument.direction}
+                              currentStage={selectedDocument.currentStage}
+                              size="lg"
+                            />
+                          </CardContent>
+                        </Card>
+
+                        {/* Workflow Timeline */}
+                        <Card className="border-2">
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <History className="h-4 w-4 text-primary" />
+                              Historial de Workflow
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <WorkflowTimeline
+                              document={selectedDocument}
+                            />
+                          </CardContent>
+                        </Card>
+                      </>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-12">
+                          <div className="empty-state">
+                            <History className="empty-state-icon" />
+                            <h3 className="empty-state-title">Workflow no disponible</h3>
+                            <p className="empty-state-description">
+                              La información de workflow no está disponible para este documento
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* AI Summary if available */}
+                    {selectedDocument.aiSummary && (
+                      <Card className="border-2 border-primary/20 bg-primary/5">
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            Resumen IA
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="prose prose-sm max-w-none">
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {selectedDocument.aiSummary}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="files" className="mt-6">
+                <ScrollArea className="h-[55vh]">
+                  <div className="space-y-4 px-1">
+                    {selectedDocument.files && selectedDocument.files.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedDocument.files.map((file: any, index: number) => (
+                          <Card key={index} className="border-2 hover:border-primary/20 transition-colors">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                    <FileText className="h-5 w-5 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{file.originalName}</p>
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                      <span>{(file.size / 1024).toFixed(1)} KB</span>
+                                      {file.mimeType && (
+                                        <>
+                                          <span>·</span>
+                                          <span>{file.mimeType.split('/')[1].toUpperCase()}</span>
+                                        </>
+                                      )}
+                                      {file.uploadedAt && (
+                                        <>
+                                          <span>·</span>
+                                          <span>{format(new Date(file.uploadedAt), 'dd/MM/yyyy', { locale: es })}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      toast.loading('Descargando archivo...');
+                                      const blob = await documentsApi.downloadFile(file.id);
+                                      const url = window.URL.createObjectURL(blob);
+                                      const link = document.createElement('a');
+                                      link.href = url;
+                                      link.download = file.originalName;
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                      window.URL.revokeObjectURL(url);
+                                      toast.dismiss();
+                                      toast.success('Archivo descargado exitosamente');
+                                    } catch (error) {
+                                      toast.dismiss();
+                                      toast.error('Error al descargar archivo');
+                                    }
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <Download className="h-4 w-4" />
+                                  Descargar
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-12">
+                          <div className="empty-state">
+                            <FileDown className="empty-state-icon" />
+                            <h3 className="empty-state-title">No hay archivos</h3>
+                            <p className="empty-state-description">
+                              Este documento no tiene archivos adjuntos
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 </ScrollArea>
               </TabsContent>

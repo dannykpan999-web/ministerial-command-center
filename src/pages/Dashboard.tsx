@@ -18,20 +18,28 @@ import {
   AlertTriangle,
   FileText,
 } from 'lucide-react';
-import { fetchDeadlines, Deadline, getUserById } from '@/lib/mockData';
+import { getDeadlines } from '@/lib/api/deadlines.api';
+import type { Deadline } from '@/lib/api/deadlines.api';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardStats, useInboxDocuments } from '@/hooks/useDocuments';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
 import { WorkflowStatisticsCard } from '@/components/workflow/WorkflowStatisticsCard';
-import { useEffect, useState } from 'react';
+
+function getEntityColor(name?: string): string {
+  if (!name) return '#6366f1';
+  const palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return palette[Math.abs(hash) % palette.length];
+}
 
 export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [urgentDeadlines, setUrgentDeadlines] = useState<Deadline[]>([]);
 
   // Fetch dashboard stats with real API
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -43,17 +51,18 @@ export default function Dashboard() {
     sort: 'createdAt:desc',
   });
 
+  // Fetch urgent deadlines with real API
+  const { data: deadlinesData, isLoading: deadlinesLoading } = useQuery({
+    queryKey: ['deadlines', 'urgent'],
+    queryFn: () => getDeadlines(),
+  });
+
+  const urgentDeadlines: Deadline[] = (deadlinesData || [])
+    .filter((d: Deadline) => d.status === 'OVERDUE' || d.priority === 'HIGH' || d.priority === 'URGENT')
+    .slice(0, 4);
+
   const loading = statsLoading || docsLoading;
   const recentDocs = inboxData?.data || [];
-
-  useEffect(() => {
-    // Still using mock data for deadlines (will be implemented in future weeks)
-    async function loadDeadlines() {
-      const deadlines = await fetchDeadlines();
-      setUrgentDeadlines(deadlines.filter(d => d.status === 'urgent' || d.status === 'overdue').slice(0, 4));
-    }
-    loadDeadlines();
-  }, []);
 
   const quickActions = [
     { label: t('dashboard.register_entry'), icon: Inbox, path: '/inbox/new', primary: true },
@@ -170,7 +179,7 @@ export default function Dashboard() {
                     >
                       <div
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] sm:text-xs font-semibold text-primary-foreground"
-                        style={{ backgroundColor: entity?.color || '#6366f1' }}
+                        style={{ backgroundColor: getEntityColor(entity?.name) }}
                       >
                         {entity?.shortName || entity?.name?.substring(0, 2)?.toUpperCase()}
                       </div>
@@ -223,7 +232,7 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
-            {loading ? (
+            {deadlinesLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-start gap-3 animate-pulse">
@@ -242,34 +251,31 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-3 stagger-children">
-                {urgentDeadlines.map((deadline) => {
-                  const user = getUserById(deadline.assignedTo);
-                  return (
-                    <div
-                      key={deadline.id}
-                      className="flex items-start gap-3 p-2 sm:p-3 rounded-lg border border-border/50 hover:border-border cursor-pointer transition-all duration-200 hover:translate-x-1 hover:shadow-sm active:scale-[0.98]"
-                      onClick={() => navigate('/deadlines')}
-                    >
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-transform ${
-                        deadline.status === 'overdue' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
-                      }`}>
-                        <Clock className={`h-4 w-4 ${deadline.status === 'overdue' ? 'animate-pulse' : ''}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs sm:text-sm font-medium truncate">{deadline.title}</p>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-                          {user?.name} · Vence {format(deadline.dueDate, 'dd MMM', { locale: es })}
-                        </p>
-                      </div>
-                      <StatusBadge
-                        variant={deadline.status === 'overdue' ? 'destructive' : 'warning'}
-                        className="text-[10px] sm:text-xs shrink-0"
-                      >
-                        {deadline.status === 'overdue' ? 'Vencido' : 'Urgente'}
-                      </StatusBadge>
+                {urgentDeadlines.map((deadline) => (
+                  <div
+                    key={deadline.id}
+                    className="flex items-start gap-3 p-2 sm:p-3 rounded-lg border border-border/50 hover:border-border cursor-pointer transition-all duration-200 hover:translate-x-1 hover:shadow-sm active:scale-[0.98]"
+                    onClick={() => navigate('/deadlines')}
+                  >
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-transform ${
+                      deadline.status === 'OVERDUE' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                    }`}>
+                      <Clock className={`h-4 w-4 ${deadline.status === 'OVERDUE' ? 'animate-pulse' : ''}`} />
                     </div>
-                  );
-                })}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium truncate">{deadline.title}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                        {deadline.document?.title || deadline.description || ''}{deadline.document?.title || deadline.description ? ' · ' : ''}Vence {format(new Date(deadline.dueDate), 'dd MMM', { locale: es })}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      variant={deadline.status === 'OVERDUE' ? 'destructive' : 'warning'}
+                      className="text-[10px] sm:text-xs shrink-0"
+                    >
+                      {deadline.status === 'OVERDUE' ? 'Vencido' : 'Urgente'}
+                    </StatusBadge>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

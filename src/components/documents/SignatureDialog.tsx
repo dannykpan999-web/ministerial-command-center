@@ -22,6 +22,7 @@ import { PenTool } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { axiosInstance } from '@/lib/api/axios';
+import { createSignatureFlow } from '@/lib/api/signature-flows.api';
 
 interface SignatureDialogProps {
   open: boolean;
@@ -57,11 +58,17 @@ export function SignatureDialog({ open, onOpenChange, document }: SignatureDialo
   // Send to signature mutation
   const signatureMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await axiosInstance.post(`/documents/${document.id}/signature`, data);
-      return response.data;
+      return createSignatureFlow({
+        documentId: document.id,
+        userIds: data.userIds,
+        message: data.message,
+        sendNotification: data.sendNotification,
+        notificationMethod: data.notificationMethod,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['signature-flows'] });
       toast.success('Documento enviado a firma exitosamente');
       handleClose();
     },

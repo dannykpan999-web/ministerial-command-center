@@ -16,6 +16,11 @@ export interface CreateDocumentDto {
   tags?: string[];
   receivedAt?: Date;
   sentAt?: Date;
+  // Official PDF header fields
+  subDepartment?: string;
+  referenceCode?: string;
+  signerTitle?: string;
+  recipientTitle?: string;
 }
 
 export interface UpdateDocumentDto extends Partial<CreateDocumentDto> {
@@ -24,6 +29,10 @@ export interface UpdateDocumentDto extends Partial<CreateDocumentDto> {
   aiProposedResponse?: string;
   aiKeyPoints?: string[];
   qrCode?: string;
+  subDepartment?: string;
+  referenceCode?: string;
+  signerTitle?: string;
+  recipientTitle?: string;
 }
 
 export interface QueryDocumentDto {
@@ -55,6 +64,15 @@ export interface DecreeDocumentDto {
 export interface AssignDocumentDto {
   userId: string;
   note?: string;
+}
+
+export interface CreateDocumentFromTemplateDto {
+  templateId: string;
+  variables: Record<string, string>;
+  title?: string;
+  entityId?: string;
+  responsibleId?: string;
+  direction?: 'INCOMING' | 'OUTGOING';
 }
 
 export const documentsApi = {
@@ -164,6 +182,20 @@ export const documentsApi = {
     return response.data;
   },
 
+  // Download document as Word (.docx)
+  downloadWord: async (id: string): Promise<Blob> => {
+    const response = await axiosInstance.get(`/documents/${id}/word`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Move document to other tray (change direction IN↔OUT)
+  moveDirection: async (id: string, direction: 'IN' | 'OUT') => {
+    const response = await axiosInstance.patch(`/documents/${id}`, { direction });
+    return response.data;
+  },
+
   // Upload files to document with OCR processing
   uploadFiles: async (
     documentId: string,
@@ -182,6 +214,7 @@ export const documentsApi = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 300000, // 5 minutes: allows for slow connections + OCR processing
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total && onProgress) {
             const percentCompleted = Math.round(
@@ -275,45 +308,6 @@ export const documentsApi = {
     return response.data;
   },
 
-  // Convert file to target format (Phase 2: Conversion)
-  convertFile: async (fileId: string, targetFormat: 'pdf' | 'docx' | 'xlsx') => {
-    const response = await axiosInstance.post(`/files/${fileId}/convert`, {
-      targetFormat,
-    });
-    return response.data;
-  },
-
-  // Get supported conversion formats (Phase 2: Conversion)
-  getConversionFormats: async (fileId: string) => {
-    const response = await axiosInstance.get(`/files/${fileId}/conversions`);
-    return response.data;
-  },
-
-  // Get file security details (Phase 1: Security)
-  getFileSecurityDetails: async (fileId: string) => {
-    const response = await axiosInstance.get(`/files/${fileId}/security/details`);
-    return response.data;
-  },
-
-  // Review file security flag (Phase 1: Security - Admin only)
-  reviewFileSecurity: async (fileId: string, approved: boolean) => {
-    const response = await axiosInstance.post(`/files/${fileId}/security/review`, {
-      approved,
-    });
-    return response.data;
-  },
-
-  // Get flagged files (Phase 1: Security - Admin only)
-  getFlaggedFiles: async () => {
-    const response = await axiosInstance.get('/files/security/flagged');
-    return response.data;
-  },
-
-  // Get security statistics (Phase 1: Security - Admin only)
-  getSecurityStats: async () => {
-    const response = await axiosInstance.get('/files/security/stats');
-    return response.data;
-  },
 
   // Generate or regenerate AI content
   generateAI: async (documentId: string, force: boolean = false) => {
@@ -522,6 +516,12 @@ export const documentsApi = {
 
   getSignatureStats: async () => {
     const response = await axiosInstance.get('/documents/signature/stats');
+    return response.data;
+  },
+
+  // Create document from template
+  createFromTemplate: async (data: CreateDocumentFromTemplateDto) => {
+    const response = await axiosInstance.post('/documents/from-template', data);
     return response.data;
   },
 };

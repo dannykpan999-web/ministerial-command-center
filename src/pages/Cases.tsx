@@ -40,6 +40,18 @@ import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 
+// Utility function to strip HTML tags
+const stripHtmlTags = (html: string): string => {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/p>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const savedViews = [
   { id: 'open', label: 'Abiertos', icon: FolderOpen, filter: { status: ExpStatus.OPEN } },
   { id: 'in_progress', label: 'En progreso', icon: AlertTriangle, filter: { status: ExpStatus.IN_PROGRESS } },
@@ -214,7 +226,7 @@ export default function CasesPage() {
                   {/* Description */}
                   {exp.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                      {exp.description}
+                      {stripHtmlTags(exp.description)}
                     </p>
                   )}
 
@@ -258,7 +270,7 @@ export default function CasesPage() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground line-clamp-1">
-                        {exp.description || '-'}
+                        {exp.description ? stripHtmlTags(exp.description) : '-'}
                       </span>
                     </TableCell>
                     <TableCell>

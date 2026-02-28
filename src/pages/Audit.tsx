@@ -35,6 +35,105 @@ const actionIcons: Record<string, any> = {
   system: Activity,
 };
 
+// Helper function to format audit log values
+function formatAuditValue(key: string, value: any): string {
+  // Handle null/undefined
+  if (value === null || value === undefined) {
+    return 'N/A';
+  }
+
+  // Handle dates
+  if (key.includes('Date') || key.includes('At')) {
+    try {
+      return format(new Date(value as string), 'dd/MM/yyyy HH:mm', { locale: es });
+    } catch {
+      return String(value);
+    }
+  }
+
+  // Handle objects
+  if (typeof value === 'object' && value !== null) {
+    // If it's a user object
+    if (value.firstName && value.lastName) {
+      return `${value.firstName} ${value.lastName}`;
+    }
+
+    // If it's a file object
+    if (value.originalName) {
+      return value.originalName;
+    }
+
+    // If it's a document object
+    if (value.title) {
+      return value.title;
+    }
+
+    // If it has a name property
+    if (value.name) {
+      return value.name;
+    }
+
+    // For other objects, try to extract useful info
+    if (value.id) {
+      return `ID: ${value.id.substring(0, 8)}...`;
+    }
+
+    // Last resort: show key-value pairs
+    try {
+      const entries = Object.entries(value)
+        .filter(([k, v]) => v !== null && v !== undefined && k !== 'id')
+        .slice(0, 3)
+        .map(([k, v]) => `${k}: ${String(v).substring(0, 20)}`)
+        .join(', ');
+      return entries || 'Objeto vacío';
+    } catch {
+      return 'Objeto complejo';
+    }
+  }
+
+  // Handle arrays
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Lista vacía';
+    if (value.length === 1) return String(value[0]);
+    return `${value.length} elementos`;
+  }
+
+  // For specific ID fields, show a cleaner format
+  if ((key.includes('Id') || key.includes('To')) && typeof value === 'string' && value.length > 20) {
+    return `ID: ${value.substring(0, 8)}...`;
+  }
+
+  // Default: convert to string
+  return String(value);
+}
+
+// Helper function to get friendly label for keys
+function getKeyLabel(key: string): string {
+  const labels: Record<string, string> = {
+    signatureType: 'Tipo de firma',
+    signatureDate: 'Fecha de firma',
+    sealDate: 'Fecha de sello',
+    appliedBy: 'Aplicado por',
+    signedAt: 'Firmado el',
+    sealAppliedAt: 'Sello aplicado el',
+    oldStage: 'Estado anterior',
+    newStage: 'Estado nuevo',
+    oldValue: 'Valor anterior',
+    newValue: 'Valor nuevo',
+    oldStatus: 'Estado anterior',
+    newStatus: 'Estado nuevo',
+    comment: 'Comentario',
+    assignedTo: 'Asignado a',
+    responsibleId: 'Responsable',
+    entityId: 'Entidad',
+    title: 'Título',
+    fileName: 'Archivo',
+    documentData: 'Datos del documento',
+  };
+
+  return labels[key] || `${key}:`;
+}
+
 export default function AuditPage() {
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -371,6 +470,25 @@ export default function AuditPage() {
                           <span>IP: {log.ipAddress}</span>
                         )}
                       </div>
+
+                      {/* Changes/Details */}
+                      {log.changes && Object.keys(log.changes).length > 0 && (
+                        <div className="mt-2 pt-2 border-t text-xs">
+                          <p className="font-medium text-muted-foreground mb-1">Detalles:</p>
+                          <div className="space-y-1">
+                            {Object.entries(log.changes).map(([key, value]) => (
+                              <div key={key} className="flex gap-2">
+                                <span className="text-muted-foreground min-w-[120px]">
+                                  {getKeyLabel(key)}
+                                </span>
+                                <span className="text-foreground font-medium break-words">
+                                  {formatAuditValue(key, value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Timestamp */}

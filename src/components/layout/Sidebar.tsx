@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
-  { key: 'nav.inicio', path: '/', icon: Home, color: 'bg-blue-500' },
+  { key: 'nav.inicio', path: '/dashboard', icon: Home, color: 'bg-blue-500' },
   { key: 'nav.bandeja_entrada', path: '/inbox', icon: Inbox, color: 'bg-green-500' },
   { key: 'nav.bandeja_salida', path: '/outbox', icon: Send, color: 'bg-orange-500' },
   { key: 'nav.nuevo_documento', path: '/new-entry', icon: FileText, color: 'bg-blue-600' },
@@ -51,7 +51,7 @@ const navItems = [
 
 // Mobile bottom navigation items (subset of main nav)
 const mobileNavItems = [
-  { key: 'nav.inicio', path: '/', icon: Home },
+  { key: 'nav.inicio', path: '/dashboard', icon: Home },
   { key: 'nav.bandeja_entrada', path: '/inbox', icon: Inbox },
   { key: 'nav.expedientes', path: '/cases', icon: FolderOpen },
   { key: 'nav.asistente', path: '/assistant', icon: Bot },

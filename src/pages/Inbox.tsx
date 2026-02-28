@@ -74,8 +74,9 @@ import {
   RefreshCw,
   Stamp,
   CheckCircle,
+  ArrowLeftRight,
+  FileType,
 } from 'lucide-react';
-import { entities, entityTypeLabels } from '@/lib/mockData';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DocumentAIPanel, DecreeDialog } from '@/components/documents/DocumentAIPanel';
@@ -92,7 +93,7 @@ import { SignatureProtocolDialog } from '@/components/documents/SignatureProtoco
 import { DocumentStageProgress } from '@/components/workflow/DocumentStageProgress';
 import { useInboxDocuments, useArchiveDocument, useDeleteDocument, useDecreeDocument } from '@/hooks/useDocuments';
 import { documentsApi } from '@/lib/api/documents.api';
-import { entitiesApi, EntityType } from '@/lib/api/entities.api';
+import { entitiesApi, EntityType, getEntityTypeLabel } from '@/lib/api/entities.api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -124,6 +125,7 @@ export default function InboxPage() {
   const [manualEntryStampDialogOpen, setManualEntryStampDialogOpen] = useState(false);
   const [acknowledgmentDialogOpen, setAcknowledgmentDialogOpen] = useState(false);
   const [signatureProtocolDialogOpen, setSignatureProtocolDialogOpen] = useState(false);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
   // Fetch all entities for filtering
   const { data: allEntities = [] } = useQuery({
@@ -337,6 +339,45 @@ export default function InboxPage() {
     }
   };
 
+  const handleMoveToOutbox = (doc: any) => {
+    setSelectedDocument(doc);
+    setMoveDialogOpen(true);
+  };
+
+  const confirmMove = async () => {
+    if (!selectedDocument) return;
+    try {
+      await documentsApi.moveDirection(selectedDocument.id, 'OUT');
+      setMoveDialogOpen(false);
+      setSelectedDocument(null);
+      refetch();
+      toast.success('Documento movido a Bandeja de Salida');
+    } catch {
+      toast.error('Error al mover documento');
+    }
+  };
+
+  const handleDownloadWord = async (doc: any) => {
+    try {
+      toast.loading('Generando Word...');
+      const wordBlob = await documentsApi.downloadWord(doc.id);
+      const url = window.URL.createObjectURL(wordBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `documento-${doc.correlativeNumber}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.dismiss();
+      toast.success('Word descargado exitosamente');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Error al descargar Word');
+      console.error('Word download error:', error);
+    }
+  };
+
   const handleBulkDownloadPdfs = async () => {
     if (selectedIds.length === 0) return;
 
@@ -494,26 +535,26 @@ export default function InboxPage() {
             </SelectTrigger>
             <SelectContent className="max-h-[60vh] sm:max-h-80">
               <SelectItem value="all">{t('inbox.all_entities')}</SelectItem>
-              {/* Group by entity type */}
-              {(['internal', 'public', 'private', 'government'] as const).map(type => {
-                const typeEntities = entities.filter(e => e.type === type);
+              {/* Group by entity type from real API */}
+              {(Object.values(EntityType) as EntityType[]).map(type => {
+                const typeEntities = allEntities.filter((e: any) => e.type === type);
                 if (typeEntities.length === 0) return null;
                 return (
                   <SelectGroup key={type}>
                     <SelectLabel className="flex items-center gap-1.5 text-xs text-muted-foreground py-1.5">
-                      {type === 'internal' && <Home className="h-3 w-3" />}
-                      {type === 'public' && <Landmark className="h-3 w-3" />}
-                      {type === 'private' && <Briefcase className="h-3 w-3" />}
-                      {type === 'government' && <Building2 className="h-3 w-3" />}
-                      {entityTypeLabels[type]}
+                      {type === EntityType.INTERNAL_DEPARTMENT && <Home className="h-3 w-3" />}
+                      {type === EntityType.PUBLIC_COMPANY && <Landmark className="h-3 w-3" />}
+                      {type === EntityType.PRIVATE_COMPANY && <Briefcase className="h-3 w-3" />}
+                      {type === EntityType.GOVERNMENT_MINISTRY && <Building2 className="h-3 w-3" />}
+                      {type === EntityType.INTERNATIONAL_ORG && <Factory className="h-3 w-3" />}
+                      {type === EntityType.EMBASSY && <ExternalLink className="h-3 w-3" />}
+                      {type === EntityType.CITIZEN && <FileText className="h-3 w-3" />}
+                      {getEntityTypeLabel(type)}
                     </SelectLabel>
-                    {typeEntities.map(entity => (
+                    {typeEntities.map((entity: any) => (
                       <SelectItem key={entity.id} value={entity.id}>
                         <span className="flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: entity.color }}
-                          />
+                          <span className="h-2 w-2 rounded-full shrink-0 bg-primary/40" />
                           <span className="truncate text-xs sm:text-sm">{entity.name}</span>
                         </span>
                       </SelectItem>
@@ -679,8 +720,14 @@ export default function InboxPage() {
                       className="group transition-colors hover:bg-muted/50 cursor-pointer"
                       style={{ animationDelay: `${index * 0.03}s` }}
                       onClick={(e) => {
-                        // Don't trigger if clicking checkbox or dropdown button
-                        if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('[role="checkbox"]')) {
+                        // Don't trigger if clicking checkbox, dropdown button, or dropdown menu items
+                        const target = e.target as HTMLElement;
+                        if (
+                          target.closest('button') ||
+                          target.closest('[role="checkbox"]') ||
+                          target.closest('[role="menuitem"]') ||
+                          target.closest('[role="menu"]')
+                        ) {
                           return;
                         }
                         handleEdit(doc);
@@ -805,9 +852,18 @@ export default function InboxPage() {
                               <Download className="h-4 w-4 mr-2 text-blue-600" />
                               Descargar PDF
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadWord(doc)}>
+                              <FileType className="h-4 w-4 mr-2 text-blue-600" />
+                              Descargar Word
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handlePrint(doc)}>
                               <Printer className="h-4 w-4 mr-2 text-green-600" />
                               Imprimir
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleMoveToOutbox(doc)}>
+                              <ArrowLeftRight className="h-4 w-4 mr-2 text-indigo-600" />
+                              Mover a Bandeja de Salida
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -1010,9 +1066,18 @@ export default function InboxPage() {
                                   <Download className="h-3.5 w-3.5 mr-2 text-blue-600" />
                                   PDF
                                 </DropdownMenuItem>
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleDownloadWord(doc)}>
+                                  <FileType className="h-3.5 w-3.5 mr-2 text-blue-600" />
+                                  Word
+                                </DropdownMenuItem>
                                 <DropdownMenuItem className="py-2 text-xs" onClick={() => handlePrint(doc)}>
                                   <Printer className="h-3.5 w-3.5 mr-2 text-green-600" />
                                   Imprimir
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="py-2 text-xs" onClick={() => handleMoveToOutbox(doc)}>
+                                  <ArrowLeftRight className="h-3.5 w-3.5 mr-2 text-indigo-600" />
+                                  Mover a Salida
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -1270,6 +1335,35 @@ export default function InboxPage() {
               disabled={deleteDocument.isPending}
             >
               {deleteDocument.isPending ? 'Eliminando...' : 'Eliminar Permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Move to Outbox Confirmation Dialog */}
+      <AlertDialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Mover a Bandeja de Salida?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedDocument && (
+                <>
+                  El documento "{selectedDocument.title}" será movido a la Bandeja de Salida.
+                  <br />
+                  <span className="text-xs text-muted-foreground">
+                    Número: {selectedDocument.correlativeNumber}
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmMove}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              Mover a Salida
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

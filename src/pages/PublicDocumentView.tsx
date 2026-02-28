@@ -11,7 +11,6 @@ import {
   Building2,
   User,
   ArrowLeft,
-  Download,
   Eye,
   FileCheck,
   AlertCircle,
@@ -90,7 +89,7 @@ export default function PublicDocumentView() {
       }
 
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
         const response = await fetch(`${API_URL}/documents/public/${id}`);
 
         if (!response.ok) {
@@ -118,32 +117,9 @@ export default function PublicDocumentView() {
     fetchDocument();
   }, [id]);
 
-  const handleDownloadFile = useCallback(async (fileId: string, fileName: string) => {
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      const response = await fetch(`${API_URL}/documents/files/${fileId}/download`);
-
-      if (!response.ok) {
-        throw new Error('Failed to get file URL');
-      }
-
-      const data = await response.json();
-
-      const link = document.createElement('a');
-      link.href = data.url;
-      link.download = fileName;
-      link.target = '_blank';
-      link.click();
-      toast.success('Descargando archivo...');
-    } catch (error) {
-      console.error('Error downloading file:', error);
-      toast.error('Error al descargar archivo');
-    }
-  }, []);
-
   const handleViewFile = useCallback(async (fileId: string) => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${API_URL}/documents/files/${fileId}/download`);
 
       if (!response.ok) {
@@ -412,14 +388,6 @@ export default function PublicDocumentView() {
                               >
                                 <Eye className="h-4 w-4 mr-1" />
                                 Ver
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDownloadFile(file.id, file.fileName)}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Descargar
                               </Button>
                               <Button
                                 variant="outline"

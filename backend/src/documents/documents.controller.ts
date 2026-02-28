@@ -38,6 +38,7 @@ import { QueryDocumentDto } from './dto/query-document.dto';
 import { DecreeDocumentDto } from './dto/decree-document.dto';
 import { AssignDocumentDto } from './dto/assign-document.dto';
 import { SearchDocumentDto } from './dto/search-document.dto';
+import { CreateDocumentFromTemplateDto } from './dto/create-document-from-template.dto';
 import { GenerateAIDto } from './dto/generate-ai.dto';
 import { GenerateDocumentFromPromptDto } from './dto/generate-document-from-prompt.dto';
 import { AnalyzeDocumentDto } from './dto/analyze-document.dto';
@@ -50,6 +51,7 @@ import { AcknowledgmentService } from './acknowledgment.service';
 import { SignatureProtocolService } from './signature-protocol.service';
 import { AIDocumentGeneratorService } from './ai-document-generator.service';
 import { OfficialPdfTemplateService } from './official-pdf-template.service';
+import { OfficialWordTemplateService } from './official-word-template.service';
 
 @ApiTags('Documents')
 @ApiBearerAuth()
@@ -68,10 +70,11 @@ export class DocumentsController {
     private readonly signatureProtocolService: SignatureProtocolService,
     private readonly aiDocumentGeneratorService: AIDocumentGeneratorService,
     private readonly officialPdfTemplateService: OfficialPdfTemplateService,
+    private readonly officialWordTemplateService: OfficialWordTemplateService,
   ) {}
 
   @Post()
-  @Roles('ADMIN', 'GABINETE', 'REVISOR')
+  @Roles('ADMIN', 'GABINETE')
   @ApiOperation({ summary: 'Create a new document' })
   @ApiResponse({ status: 201, description: 'Document created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -313,11 +316,38 @@ export class DocumentsController {
     }
   }
 
+  @Get(':id/word')
+  @Roles('ADMIN', 'GABINETE', 'REVISOR', 'LECTOR')
+  @ApiOperation({ summary: 'Generate and download official Word (DOCX) of document' })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  @ApiResponse({ status: 200, description: 'Official DOCX generated successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async downloadWord(@Param('id') id: string, @Res() res: Response) {
+    try {
+      const docxBuffer = await this.officialWordTemplateService.generateOfficialWord(id);
+      const document = await this.documentsService.findOne(id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Documento-Oficial-${document.correlativeNumber || document.id}.docx"`,
+      );
+      res.setHeader('Content-Length', docxBuffer.length);
+
+      return res.send(docxBuffer);
+    } catch (error) {
+      throw new HttpException(
+        `Failed to generate Word document: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post(':id/files')
   @Roles('ADMIN', 'GABINETE', 'REVISOR')
   @UseInterceptors(
     FilesInterceptor('files', 10, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+      limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
     }),
   )
   @ApiOperation({ summary: 'Upload files to document with OCR and AI processing' })
@@ -352,7 +382,7 @@ export class DocumentsController {
   @Roles('ADMIN', 'GABINETE', 'REVISOR')
   @UseInterceptors(
     FilesInterceptor('file', 1, {
-      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+      limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
     }),
   )
   @ApiOperation({ summary: 'Replace an existing file with a new version (creates version history)' })
@@ -450,6 +480,7 @@ export class DocumentsController {
       dto.documentType,
       dto.prompt,
       dto.tone || 'formal',
+      dto.linkedDocumentIds,
     );
   }
 
@@ -474,16 +505,23 @@ export class DocumentsController {
     }
 
     // Check if document has content to analyze
-    if (!document.content || document.content.trim().length < 50) {
+    // Priority: 1) document.content, 2) aiSummary (from OCR), 3) aiProposedResponse
+    const contentToAnalyze =
+      document.content?.trim() ||
+      document.aiSummary?.trim() ||
+      document.aiProposedResponse?.trim() ||
+      '';
+
+    if (contentToAnalyze.length < 50) {
       throw new HttpException(
-        'El documento no tiene suficiente contenido para analizar',
+        'El documento no tiene suficiente contenido para analizar. Por favor, asegúrese de que el documento tenga contenido de texto o que se haya completado la extracción OCR.',
         HttpStatus.BAD_REQUEST,
       );
     }
 
     // Call AI analysis service
     return await this.aiDocumentGeneratorService.analyzeDocument(
-      document.content,
+      contentToAnalyze,
       dto.analysisType || 'executive_summary',
     );
   }
@@ -738,5 +776,22 @@ export class DocumentsController {
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getSignatureStats() {
     return this.signatureProtocolService.getSignatureStats();
+  }
+
+  @Post('from-template')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'GABINETE', 'REVISOR')
+  @ApiOperation({
+    summary: 'Create document from template',
+    description: 'Creates a new document by replacing template variables with provided values and generating a PDF',
+  })
+  @ApiResponse({ status: 201, description: 'Document created successfully from template' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  @ApiResponse({ status: 400, description: 'Invalid template or missing variables' })
+  async createFromTemplate(
+    @Body() dto: CreateDocumentFromTemplateDto,
+    @Request() req,
+  ) {
+    return this.documentsService.createFromTemplate(dto, req.user.id);
   }
 }

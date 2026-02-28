@@ -92,8 +92,12 @@ export class SignatureProtocolService {
 
     // Verify document is in signature stage
     if (document.currentStage !== 'SIGNATURE_PROTOCOL') {
+      const stageMessage = document.currentStage
+        ? `Etapa actual: ${document.currentStage}`
+        : 'El documento no tiene una etapa asignada';
+
       throw new BadRequestException(
-        `Document must be in SIGNATURE_PROTOCOL stage to be signed. Current stage: ${document.currentStage}`,
+        `El documento debe estar en la etapa "Protocolo de Firma" (SIGNATURE_PROTOCOL) para ser firmado. ${stageMessage}. Por favor, cambie el estado del documento primero usando el botón "Cambiar Estado".`,
       );
     }
 
@@ -126,6 +130,8 @@ export class SignatureProtocolService {
       data: {
         signedAt: signatureData.signatureDate,
         signedBy: userId,
+        digitalSignatureUrl,
+        physicalSignatureUrl,
       },
       include: {
         responsible: true,

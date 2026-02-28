@@ -60,6 +60,34 @@ export class NotificationsController {
     return this.notificationsService.markAllAsRead(req.user.id);
   }
 
+  @Patch(':id/mute')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mute a notification' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  @ApiResponse({ status: 200, description: 'Notification muted' })
+  @ApiResponse({ status: 404, description: 'Notification not found' })
+  muteNotification(@Param('id') id: string, @Request() req) {
+    return this.notificationsService.muteNotification(id, req.user.id);
+  }
+
+  @Patch(':id/unmute')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unmute a notification' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  @ApiResponse({ status: 200, description: 'Notification unmuted' })
+  @ApiResponse({ status: 404, description: 'Notification not found' })
+  unmuteNotification(@Param('id') id: string, @Request() req) {
+    return this.notificationsService.unmuteNotification(id, req.user.id);
+  }
+
+  @Patch('mute-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mute all notifications' })
+  @ApiResponse({ status: 200, description: 'All notifications muted' })
+  muteAllNotifications(@Request() req) {
+    return this.notificationsService.muteAllNotifications(req.user.id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a notification' })
   @ApiParam({ name: 'id', description: 'Notification ID' })

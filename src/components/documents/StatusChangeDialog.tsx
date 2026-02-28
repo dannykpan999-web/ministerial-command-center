@@ -228,7 +228,7 @@ export function StatusChangeDialog({ open, onOpenChange, document }: StatusChang
             <p className="text-sm font-medium">{document?.title}</p>
             <p className="text-xs text-muted-foreground">{document?.correlativeNumber}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Dirección: {document?.direction === 'IN' ? 'Entrante' : 'Saliente'}
+              Dirección: {document?.direction === 'IN' ? 'Bandeja de Entrada' : 'Bandeja de Salida'}
             </p>
           </div>
 

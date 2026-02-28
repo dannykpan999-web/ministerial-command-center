@@ -39,8 +39,12 @@ import {
   RefreshCw,
   ScanText,
   Copy,
+  Check,
   Sparkles,
   UserPlus,
+  FileSignature,
+  Stamp,
+  Loader2,
 } from 'lucide-react';
 import { documentsApi } from '@/lib/api/documents.api';
 import { FileUpload, type UploadedFile } from '@/components/documents/FileUpload';
@@ -72,6 +76,7 @@ export function DocumentDetailSheet({
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [extractedOcrText, setExtractedOcrText] = useState<string>('');
+  const [isCopied, setIsCopied] = useState(false);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
 
@@ -146,6 +151,31 @@ export function DocumentDetailSheet({
       await uploadFilesMutation.mutateAsync(filesToUpload);
     } finally {
       setUploadingFiles(false);
+    }
+  };
+
+  const [downloadingSignedPdf, setDownloadingSignedPdf] = useState(false);
+
+  const handleDownloadSignedPdf = async () => {
+    if (!document) return;
+    setDownloadingSignedPdf(true);
+    try {
+      const blob = await documentsApi.downloadPdf(document.id);
+      const url = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = `Documento-Firmado-${document.correlativeNumber || document.id}.pdf`;
+      a.style.display = 'none';
+      window.document.body.appendChild(a);
+      a.click();
+      window.document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('PDF firmado descargado correctamente');
+    } catch (error) {
+      console.error('Signed PDF download error:', error);
+      toast.error('Error al descargar el PDF firmado');
+    } finally {
+      setDownloadingSignedPdf(false);
     }
   };
 
@@ -339,7 +369,9 @@ export function DocumentDetailSheet({
           <SheetTitle className="text-xl mb-2 flex items-start justify-between">
             <span className="flex-1">{document?.title}</span>
             <div className="flex gap-2 ml-4">
-              {document?.content && document.content.trim().length >= 50 && (
+              {((document?.content && document.content.trim().length >= 50) ||
+                (document?.files && document.files.length > 0) ||
+                (extractedOcrText && extractedOcrText.trim().length >= 50)) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -367,6 +399,19 @@ export function DocumentDetailSheet({
                   Editar
                 </Button>
               )}
+              <Button
+                size="sm"
+                onClick={handleDownloadSignedPdf}
+                disabled={downloadingSignedPdf}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {downloadingSignedPdf ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileSignature className="h-4 w-4 mr-2" />
+                )}
+                {downloadingSignedPdf ? 'Generando...' : 'PDF Firmado'}
+              </Button>
             </div>
           </SheetTitle>
           <SheetDescription className="flex items-center gap-2">
@@ -504,7 +549,7 @@ export function DocumentDetailSheet({
                   onFilesChange={setUploadedFiles}
                   onTextExtracted={setExtractedOcrText}
                   maxFiles={10}
-                  maxSize={50 * 1024 * 1024} // 50MB
+                  maxSize={50}
                 />
                 {uploadedFiles.length > 0 && (
                   <Button
@@ -532,6 +577,7 @@ export function DocumentDetailSheet({
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <Textarea
+                      id="ocr-text-content"
                       value={extractedOcrText}
                       readOnly
                       className="min-h-[150px] font-mono text-xs bg-white resize-y"
@@ -540,56 +586,52 @@ export function DocumentDetailSheet({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={async () => {
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+
                         try {
-                          // Try modern clipboard API first
-                          if (navigator.clipboard && navigator.clipboard.writeText) {
-                            await navigator.clipboard.writeText(extractedOcrText);
-                            toast.success('Texto copiado al portapapeles');
-                            return;
+                          // Get the textarea element
+                          const textarea = window.document.getElementById('ocr-text-content') as HTMLTextAreaElement;
+                          if (!textarea) {
+                            throw new Error('Textarea not found');
                           }
-                        } catch (clipboardError) {
-                          console.log('Modern clipboard API failed, trying fallback:', clipboardError);
-                        }
 
-                        // Fallback for older browsers or HTTP
-                        try {
-                          const textArea = window.document.createElement('textarea');
-                          textArea.value = extractedOcrText;
+                          // Select all text in the textarea
+                          textarea.select();
+                          textarea.setSelectionRange(0, 99999);
 
-                          // Make textarea visible but out of viewport
-                          textArea.style.position = 'absolute';
-                          textArea.style.left = '-9999px';
-                          textArea.style.top = '0';
-                          textArea.style.opacity = '0';
-
-                          window.document.body.appendChild(textArea);
-
-                          // Select the text
-                          textArea.focus();
-                          textArea.select();
-                          textArea.setSelectionRange(0, extractedOcrText.length);
-
-                          // Execute copy command
+                          // Copy the selected text
                           const successful = window.document.execCommand('copy');
 
-                          // Remove textarea
-                          window.document.body.removeChild(textArea);
+                          // Deselect
+                          window.getSelection()?.removeAllRanges();
 
                           if (successful) {
+                            setIsCopied(true);
                             toast.success('Texto copiado al portapapeles');
+                            setTimeout(() => setIsCopied(false), 2000);
                           } else {
-                            toast.error('Error al copiar texto. Por favor, intente copiar manualmente.');
+                            throw new Error('execCommand returned false');
                           }
                         } catch (error) {
                           console.error('Copy failed:', error);
-                          toast.error('Error al copiar texto. Por favor, intente copiar manualmente.');
+                          toast.error('Error al copiar. Por favor, seleccione y copie manualmente (Ctrl+C)');
                         }
                       }}
                       className="w-full"
                     >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copiar Texto
+                      {isCopied ? (
+                        <>
+                          <Check className="h-4 w-4 mr-2 text-green-600" />
+                          Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copiar Texto
+                        </>
+                      )}
                     </Button>                  </CardContent>
                 </Card>
               )}
@@ -681,6 +723,60 @@ export function DocumentDetailSheet({
                 </div>
               )}
             </div>
+
+            {/* FIRMA Y SELLO SECTION */}
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  <FileSignature className="h-4 w-4" />
+                  Firma y Sello
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Signature status */}
+                  <div className={`flex items-center gap-2 rounded-lg border p-3 ${document.signedAt ? 'border-green-200 bg-green-50' : 'border-muted bg-muted/30'}`}>
+                    <FileSignature className={`h-5 w-5 shrink-0 ${document.signedAt ? 'text-green-600' : 'text-muted-foreground'}`} />
+                    <div className="min-w-0">
+                      <p className={`text-xs font-medium ${document.signedAt ? 'text-green-800' : 'text-muted-foreground'}`}>Firma</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {document.signedAt
+                          ? format(new Date(document.signedAt), 'dd/MM/yyyy HH:mm', { locale: es })
+                          : 'Pendiente'}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Seal status */}
+                  <div className={`flex items-center gap-2 rounded-lg border p-3 ${document.physicalSealFile ? 'border-blue-200 bg-blue-50' : 'border-muted bg-muted/30'}`}>
+                    <Stamp className={`h-5 w-5 shrink-0 ${document.physicalSealFile ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                    <div className="min-w-0">
+                      <p className={`text-xs font-medium ${document.physicalSealFile ? 'text-blue-800' : 'text-muted-foreground'}`}>Sello</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {document.physicalSealFile ? 'Aplicado' : 'Pendiente'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {/* Download signed PDF button — always visible */}
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleDownloadSignedPdf}
+                  disabled={downloadingSignedPdf}
+                >
+                  {downloadingSignedPdf ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {downloadingSignedPdf
+                    ? 'Generando PDF...'
+                    : document.signedAt && document.physicalSealFile
+                    ? 'Descargar PDF Firmado y Sellado'
+                    : document.signedAt
+                    ? 'Descargar PDF Firmado'
+                    : 'Descargar PDF Oficial'}
+                </Button>
+              </div>
+            </>
 
             {/* WORKFLOW TIMELINE SECTION */}
             <Separator />
